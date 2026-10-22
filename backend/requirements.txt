@@ -1,1 +1,4 @@
-express mongoose
+express
+mongoose 
+bcryptjs 
+dotenv
