@@ -16,7 +16,7 @@ app.get("/api/health", (req, res) => {
     });
 });
 
-app.use("/api/auth", authRoutes);
+app.use("/", authRoutes);
 
 const startServer = async () => {
     try {

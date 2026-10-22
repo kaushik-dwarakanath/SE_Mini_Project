@@ -54,7 +54,7 @@ router.post("/register", async (req, res) => {
         return res.status(201).json({
             message: "Registration successful",
             user: {
-                id: user._id,
+                userId: user._id,
                 username: user.username,
                 email: user.email
             }
@@ -73,6 +73,81 @@ router.post("/register", async (req, res) => {
         }
 
         console.error("Registration error:", error.message);
+
+        return res.status(500).json({
+            message: "Internal server error"
+        });
+    }
+});
+
+router.post("/login", async (req, res) => {
+    try {
+        const { identifier, username, email, password } = req.body;
+
+        // Accept a single identifier, or a username/email field.
+        const loginIdentifier = identifier ?? username ?? email;
+
+        if (
+            typeof loginIdentifier !== "string" ||
+            !loginIdentifier.trim() ||
+            typeof password !== "string" ||
+            !password
+        ) {
+            return res.status(400).json({
+                message: "Username/email and password are required"
+            });
+        }
+
+        const value = loginIdentifier.trim();
+
+        // Search by username or email.
+        const user = await User.findOne({
+            $or: [
+                { username: value },
+                { email: value.toLowerCase() }
+            ]
+        });
+
+        // Use the same error for unknown users and wrong passwords.
+        if (!user) {
+            return res.status(401).json({
+                message: "Invalid username/email or password"
+            });
+        }
+
+        const passwordMatches = await bcrypt.compare(
+            password,
+            user.password
+        );
+
+        if (!passwordMatches) {
+            return res.status(401).json({
+                message: "Invalid username/email or password"
+            });
+        }
+
+        // Generate a JWT valid for one hour.
+        if (!process.env.JWT_SECRET) {
+            throw new Error("JWT_SECRET is not configured");
+        }
+
+        const token = require("jsonwebtoken").sign(
+            { userId: user._id.toString() },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        return res.status(200).json({
+            message: "Login successful",
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email
+            }
+        });
+    } catch (error) {
+        console.error("Login error:", error.message);
 
         return res.status(500).json({
             message: "Internal server error"
