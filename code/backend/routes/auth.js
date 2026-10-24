@@ -1,9 +1,12 @@
+
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
 const router = express.Router();
 
+// Register a new user
 router.post("/register", async (req, res) => {
     try {
         let { username, email, password } = req.body;
@@ -31,10 +34,7 @@ router.post("/register", async (req, res) => {
         }
 
         const existingUser = await User.findOne({
-            $or: [
-                { username },
-                { email }
-            ]
+            $or: [{ username }, { email }]
         });
 
         if (existingUser) {
@@ -43,6 +43,7 @@ router.post("/register", async (req, res) => {
             });
         }
 
+        // Hash the password before storing it.
         const hashedPassword = await bcrypt.hash(password, 12);
 
         const user = await User.create({
@@ -80,11 +81,11 @@ router.post("/register", async (req, res) => {
     }
 });
 
+// Log in using username or email and password.
 router.post("/login", async (req, res) => {
     try {
         const { identifier, username, email, password } = req.body;
 
-        // Accept a single identifier, or a username/email field.
         const loginIdentifier = identifier ?? username ?? email;
 
         if (
@@ -100,15 +101,15 @@ router.post("/login", async (req, res) => {
 
         const value = loginIdentifier.trim();
 
-        // Search by username or email.
+        // Explicitly select the password hash because User.js uses select: false.
         const user = await User.findOne({
             $or: [
                 { username: value },
                 { email: value.toLowerCase() }
             ]
-        });
+        }).select("+password");
 
-        // Use the same error for unknown users and wrong passwords.
+        // Use the same response for unknown users and incorrect passwords.
         if (!user) {
             return res.status(401).json({
                 message: "Invalid username/email or password"
@@ -126,12 +127,15 @@ router.post("/login", async (req, res) => {
             });
         }
 
-        // Generate a JWT valid for one hour.
         if (!process.env.JWT_SECRET) {
-            throw new Error("JWT_SECRET is not configured");
+            console.error("JWT_SECRET is not configured");
+
+            return res.status(500).json({
+                message: "Internal server error"
+            });
         }
 
-        const token = require("jsonwebtoken").sign(
+        const token = jwt.sign(
             { userId: user._id.toString() },
             process.env.JWT_SECRET,
             { expiresIn: "1h" }
