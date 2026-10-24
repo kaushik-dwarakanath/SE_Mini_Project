@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -20,14 +21,20 @@ app.use("/", authRoutes);
 
 const startServer = async () => {
     try {
+        if (!process.env.MONGODB_URI) {
+            throw new Error("MONGODB_URI is not configured");
+        }
+
         await mongoose.connect(process.env.MONGODB_URI);
         console.log("MongoDB connected successfully");
 
         await mongoose.connection.db.admin().ping();
+
         await mongoose.connection.db.collection("users").createIndex(
             { username: 1 },
             { unique: true }
         );
+
         await mongoose.connection.db.collection("users").createIndex(
             { email: 1 },
             { unique: true }
