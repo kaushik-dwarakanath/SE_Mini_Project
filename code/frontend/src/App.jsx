@@ -17,23 +17,66 @@ function Navbar() {
   );
 }
 
+
 function Register() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setError("");
+    setSuccess("");
 
-    if (!username.trim() || !email.trim() || !password) {
+    const cleanUsername = username.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanUsername || !cleanEmail || !password) {
       setError("Please fill in all fields.");
       return;
     }
 
-    setError(
-      "Registration page is ready. Account creation will be connected later."
-    );
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: cleanUsername,
+          email: cleanEmail,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Registration failed. Please try again.");
+        return;
+      }
+
+      setSuccess("Account created successfully. You can now log in.");
+      setUsername("");
+      setEmail("");
+      setPassword("");
+    } catch {
+      setError(
+        "Unable to connect to the server. Please try again later."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -71,14 +114,27 @@ function Register() {
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Enter password"
+            placeholder="At least 8 characters"
             autoComplete="new-password"
+            minLength={8}
             required
           />
 
-          {error && <p className="notice" role="status">{error}</p>}
+          {error && (
+            <p className="notice" role="alert">
+              {error}
+            </p>
+          )}
 
-          <button type="submit">Register</button>
+          {success && (
+            <p className="notice" role="status">
+              {success}
+            </p>
+          )}
+
+          <button type="submit" disabled={loading}>
+            {loading ? "Registering..." : "Register"}
+          </button>
         </form>
 
         <p className="form-footer">
@@ -88,6 +144,7 @@ function Register() {
     </main>
   );
 }
+
 
 function Login() {
   const [username, setUsername] = useState("");
