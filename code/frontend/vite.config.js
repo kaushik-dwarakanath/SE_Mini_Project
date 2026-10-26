@@ -1,3 +1,4 @@
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -6,6 +7,14 @@ export default defineConfig({
   server: {
     proxy: {
       "/register": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
+      "/login": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
+      "/api": {
         target: "http://localhost:5000",
         changeOrigin: true,
       },
