@@ -1,7 +1,19 @@
 import { useState } from "react";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+
 
 function Navbar() {
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    () => Boolean(localStorage.getItem("token"))
+  );
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    setIsLoggedIn(false);
+    navigate("/login", { replace: true });
+  }
+
   return (
     <header className="navbar">
       <Link to="/login" className="brand">
@@ -9,13 +21,24 @@ function Navbar() {
       </Link>
 
       <nav>
-        <Link to="/register">Register</Link>
-        <Link to="/login">Login</Link>
-        <Link to="/chat">Chat</Link>
+        {!isLoggedIn ? (
+          <>
+            <Link to="/register">Register</Link>
+            <Link to="/login">Login</Link>
+          </>
+        ) : (
+          <>
+            <Link to="/chat">Chat</Link>
+            <button type="button" onClick={handleLogout}>
+              Logout
+            </button>
+          </>
+        )}
       </nav>
     </header>
   );
 }
+
 
 
 function Register() {
@@ -150,18 +173,52 @@ function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setError("");
 
-    if (!username.trim() || !password) {
-      setError("Please enter your username and password.");
+    const identifier = username.trim();
+
+    if (!identifier || !password) {
+      setError("Please enter your username/email and password.");
       return;
     }
 
-    setError(
-      "Login page is ready. Authentication will be connected later."
-    );
+    setLoading(true);
+
+    try {
+      const response = await fetch("/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          identifier,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Login failed. Please try again.");
+        return;
+      }
+
+      // Save the JWT for authenticated requests.
+      localStorage.setItem("token", data.token);
+
+      // Navigate to the chat page after successful login.
+      window.location.href = "/chat";
+    } catch (error) {
+      setError(
+        "Unable to connect to the server. Please check that the backend is running."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -193,9 +250,15 @@ function Login() {
             required
           />
 
-          {error && <p className="notice" role="status">{error}</p>}
+          {error && (
+            <p className="notice" role="alert">
+              {error}
+            </p>
+          )}
 
-          <button type="submit">Login</button>
+          <button type="submit" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
+          </button>
         </form>
 
         <p className="form-footer">
@@ -205,6 +268,18 @@ function Login() {
     </main>
   );
 }
+
+
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 
 function Chat() {
   const [message, setMessage] = useState("");
@@ -278,7 +353,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/chat" element={<Chat />} />
+        <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>}/>
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </>
