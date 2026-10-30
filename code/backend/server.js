@@ -6,6 +6,8 @@ const mongoose = require("mongoose");
 const authRoutes = require("./routes/auth");
 const http = require("http");
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+const User = require("./models/User");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,6 +24,8 @@ const io = new Server(server, {
     }
 });
 
+const messages = [];
+
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {
@@ -32,6 +36,83 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/", authRoutes);
+
+io.use(async (socket, next) => {
+    try {
+        const token = socket.handshake.auth?.token;
+
+        if (!token) {
+            return next(new Error("Authentication required"));
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.userId || decoded.sub;
+
+        const user = await User.findById(userId).select("username");
+
+        if (!user) {
+            return next(new Error("User not found"));
+        }
+
+        socket.data.user = {
+            id: user._id.toString(),
+            username: user.username
+        };
+
+        next();
+    } catch (error) {
+        next(new Error("Invalid authentication token"));
+    }
+});
+
+
+io.on("connection", (socket) => {
+    console.log(
+        "Client connected:",
+        socket.data.user.username,
+        socket.id
+    );
+
+    // Send previous messages to the newly connected client
+    socket.emit("chat_history", messages);
+
+    socket.on("message", (data) => {
+        if (
+            !data ||
+            typeof data.text !== "string" ||
+            !data.text.trim()
+        ) {
+            socket.emit("message_error", {
+                message: "Message text is required"
+            });
+            return;
+        }
+
+        const message = {
+            text: data.text.trim(),
+            senderId: socket.data.user.id,
+            username: socket.data.user.username,
+            timestamp: new Date().toISOString()
+        };
+
+        // Store the message on the server
+        messages.push(message);
+
+        console.log("Message received:", message);
+
+        // Send the new message to all connected clients
+        io.emit("new_message", message);
+    });
+
+    socket.on("disconnect", (reason) => {
+        console.log(
+            "Client disconnected:",
+            socket.id,
+            "Reason:",
+            reason
+        );
+    });
+});
 
 const startServer = async () => {
     try {
@@ -54,7 +135,7 @@ const startServer = async () => {
             { unique: true }
         );
 
-        app.listen(PORT, () => {
+        server.listen(PORT, () => {
             console.log(`Server running at http://localhost:${PORT}`);
         });
     } catch (error) {
