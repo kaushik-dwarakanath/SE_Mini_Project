@@ -1,6 +1,13 @@
-import { useState } from "react";
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
+import { useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
 
 function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(
@@ -38,8 +45,6 @@ function Navbar() {
     </header>
   );
 }
-
-
 
 function Register() {
   const [username, setUsername] = useState("");
@@ -168,7 +173,6 @@ function Register() {
   );
 }
 
-
 function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -207,12 +211,9 @@ function Login() {
         return;
       }
 
-      // Save the JWT for authenticated requests.
       localStorage.setItem("token", data.token);
-
-      // Navigate to the chat page after successful login.
       window.location.href = "/chat";
-    } catch (error) {
+    } catch {
       setError(
         "Unable to connect to the server. Please check that the backend is running."
       );
@@ -269,7 +270,6 @@ function Login() {
   );
 }
 
-
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
 
@@ -280,10 +280,65 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-
 function Chat() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
+  const [error, setError] = useState("");
+  const [connected, setConnected] = useState(false);
+
+  const socketRef = useRef(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setError("Please log in to access the chat.");
+      return;
+    }
+
+    const socket = io("http://localhost:5000", {
+      auth: {
+        token,
+      },
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setConnected(true);
+      setError("");
+      console.log("Connected to chat server");
+    });
+
+    socket.on("disconnect", () => {
+      setConnected(false);
+    });
+
+    socket.on("chat_history", (history) => {
+      setMessages(history);
+    });
+
+    socket.on("new_message", (newMessage) => {
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        newMessage,
+      ]);
+    });
+
+    socket.on("message_error", (data) => {
+      setError(data.message || "Message could not be sent.");
+    });
+
+    socket.on("connect_error", (err) => {
+      setConnected(false);
+      setError(err.message || "Unable to connect to chat server.");
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -292,11 +347,13 @@ function Chat() {
 
     if (!text) return;
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { id: Date.now(), text },
-    ]);
+    if (!socketRef.current?.connected) {
+      setError("Not connected to the chat server.");
+      return;
+    }
 
+    setError("");
+    socketRef.current.emit("message", { text });
     setMessage("");
   }
 
@@ -305,7 +362,12 @@ function Chat() {
       <section className="chat-card">
         <div className="chat-header">
           <h1>Chat Room</h1>
-          <p className="subtitle">Your messages appear here.</p>
+
+          <p className="subtitle">
+            {connected
+              ? "Connected to the chat room."
+              : "Connecting to chat server..."}
+          </p>
         </div>
 
         <div className="messages" aria-live="polite">
@@ -316,15 +378,27 @@ function Chat() {
           ) : (
             messages.map((item) => (
               <div className="message" key={item.id}>
-                <span className="message-sender">You</span>
+                <span className="message-sender">
+                  {item.username || "User"}
+                </span>
+
                 <p>{item.text}</p>
               </div>
             ))
           )}
         </div>
 
+        {error && (
+          <p className="notice" role="alert">
+            {error}
+          </p>
+        )}
+
         <form className="message-form" onSubmit={handleSubmit}>
-          <label className="visually-hidden" htmlFor="chat-message">
+          <label
+            className="visually-hidden"
+            htmlFor="chat-message"
+          >
             Message
           </label>
 
@@ -337,7 +411,9 @@ function Chat() {
             autoComplete="off"
           />
 
-          <button type="submit">Send</button>
+          <button type="submit" disabled={!connected}>
+            Send
+          </button>
         </form>
       </section>
     </main>
@@ -353,7 +429,14 @@ export default function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>}/>
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </>
