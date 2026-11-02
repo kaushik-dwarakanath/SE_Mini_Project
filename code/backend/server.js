@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -8,6 +7,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const User = require("./models/User");
+const Message = require("./models/Message");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,8 +24,6 @@ const io = new Server(server, {
     }
 });
 
-const messages = [];
-
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {
@@ -37,6 +35,7 @@ app.get("/api/health", (req, res) => {
 
 app.use("/", authRoutes);
 
+// Socket.IO authentication
 io.use(async (socket, next) => {
     try {
         const token = socket.handshake.auth?.token;
@@ -65,18 +64,41 @@ io.use(async (socket, next) => {
     }
 });
 
-
-io.on("connection", (socket) => {
+// Handle chat connections and messages
+io.on("connection", async (socket) => {
     console.log(
         "Client connected:",
         socket.data.user.username,
         socket.id
     );
 
-    // Send previous messages to the newly connected client
-    socket.emit("chat_history", messages);
+    // Load previous messages from MongoDB
+    try {
+        const history = await Message.find({ roomId: "general" })
+            .populate("senderId", "username")
+            .sort({ createdAt: 1 })
+            .limit(100)
+            .lean();
 
-    socket.on("message", (data) => {
+        const formattedHistory = history.map((msg) => ({
+            id: msg._id.toString(),
+            text: msg.content,
+            username: msg.senderId?.username || "User",
+            senderId: msg.senderId?._id?.toString() || "",
+            timestamp: msg.createdAt
+        }));
+
+        socket.emit("chat_history", formattedHistory);
+    } catch (error) {
+        console.error("Failed to load chat history:", error.message);
+
+        socket.emit("message_error", {
+            message: "Unable to load chat history"
+        });
+    }
+
+    // Receive and save new messages
+    socket.on("message", async (data) => {
         if (
             !data ||
             typeof data.text !== "string" ||
@@ -88,20 +110,32 @@ io.on("connection", (socket) => {
             return;
         }
 
-        const message = {
-            text: data.text.trim(),
-            senderId: socket.data.user.id,
-            username: socket.data.user.username,
-            timestamp: new Date().toISOString()
-        };
+        try {
+            const savedMessage = await Message.create({
+                senderId: socket.data.user.id,
+                roomId: "general",
+                content: data.text.trim()
+            });
 
-        // Store the message on the server
-        messages.push(message);
+            const message = {
+                id: savedMessage._id.toString(),
+                text: savedMessage.content,
+                username: socket.data.user.username,
+                senderId: savedMessage.senderId.toString(),
+                timestamp: savedMessage.createdAt
+            };
 
-        console.log("Message received:", message);
+            // Broadcast only after successful database save
+            io.emit("new_message", message);
 
-        // Send the new message to all connected clients
-        io.emit("new_message", message);
+            console.log("Message saved:", message.id);
+        } catch (error) {
+            console.error("Message save failed:", error.message);
+
+            socket.emit("message_error", {
+                message: "Message could not be saved. Please try again."
+            });
+        }
     });
 
     socket.on("disconnect", (reason) => {
@@ -114,6 +148,7 @@ io.on("connection", (socket) => {
     });
 });
 
+// Start server after MongoDB connection
 const startServer = async () => {
     try {
         if (!process.env.MONGODB_URI) {
