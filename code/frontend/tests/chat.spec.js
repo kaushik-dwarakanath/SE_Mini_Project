@@ -13,6 +13,7 @@ test.describe("local chat interface", () => {
     // Exercise the existing client-side route guard, without claiming JWT validation.
     await page.addInitScript(() => localStorage.setItem("token", "ui-test-token"));
     await page.goto("/chat");
+    await expect(page.getByRole("status")).toHaveText("Connected to server.");
   });
 
   test("shows the message area, labelled input and local-preview notice", async ({ page }) => {
@@ -21,6 +22,12 @@ test.describe("local chat interface", () => {
     await expect(page.getByText("No messages yet.", { exact: false })).toBeVisible();
     await expect(page.getByLabel("Message", { exact: true })).toBeVisible();
     await expect(page.getByText("Local preview:", { exact: false })).toBeVisible();
+    await expect(page.locator("#chat-preview-note")).toContainText(
+      "clicking Send or pressing Enter only adds your message in this tab."
+    );
+    await expect(page.getByLabel("Message", { exact: true })).toHaveAccessibleDescription(
+      /Your messages are not sent to the server or other users\./
+    );
     await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
   });
 
