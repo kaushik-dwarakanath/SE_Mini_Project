@@ -62,6 +62,8 @@ The chat page listens for the backend's `new_message` event and appends each
 message without refreshing. The payload uses `username`, `text` and `timestamp`,
 matching `code/backend/server.js`. Received messages show the sender's username
 and time alongside their text, while local previews remain labelled “You”.
+Only local previews use the outgoing bubble style; incoming messages keep the
+incoming style even if the sender's username is “You”.
 New arrivals scroll into view without clearing the draft or moving input focus.
 
 Messages without a nonblank string username and text are ignored. Missing or
@@ -96,9 +98,11 @@ scrolling, repeated messages, refresh, logout and the unauthenticated route.
 Connection tests cover the saved-token handshake, HTTP polling and WebSocket
 proxy, pending/failed connections, authentication rejection, automatic recovery,
 server disconnects, navigation/logout cleanup and cancelled retries.
-Received-message tests cover sender/content/time, live arrivals, ordering,
-repeated messages, draft and focus preservation, literal markup/Unicode,
-long messages, scrolling, malformed payloads and listener cleanup/reconnection.
+Received-message tests cover sender/content/time, incoming and local-preview
+labels and bubble styles (including an incoming username of “You”), live
+arrivals, ordering, repeated messages, draft and focus preservation, literal
+markup/Unicode, long messages, scrolling, malformed payloads and listener
+cleanup/reconnection.
 
 The test server uses the backend's installed Socket.IO package with test-only
 token checks. Tests do not require MongoDB or a running application backend,
@@ -112,8 +116,10 @@ emit the backend's event payload through the real Socket.IO transport.
 2. Confirm the chat heading, “Connected to server” status, local-preview notice,
    empty state, input and Send button are visible.
 3. Try empty/space-only input; Send should stay disabled.
-4. Send text by clicking Send and by pressing Enter. Check ordering, sender,
-   time, trimmed text and focus returning to the cleared input.
+4. Preview text by clicking Send and by pressing Enter. Confirm it appears only
+   in this tab, labelled “You” with the outgoing bubble style. No message is sent
+   to the backend or other users. Check ordering, time, trimmed text and focus
+   returning to the cleared input.
 5. Try a long word, emoji and text containing HTML characters. Confirm they
    display as text and do not widen the page.
 6. Send enough messages to scroll. Confirm new messages remain visible and
@@ -129,8 +135,12 @@ emit the backend's event payload through the real Socket.IO transport.
 10. Test an expired or invalid login token. Confirm the page reports a rejected
     connection and logout still works. Log in again with a valid account and
     confirm the connection succeeds.
-11. With `/chat` open, use an authenticated Socket.IO client to emit
-    `message` with `{ text: "Hello from another user" }` to the backend. Confirm
-    it appears immediately with that user's username and the correct text.
-    Type a draft and send more messages from the other client; confirm the draft
+11. Test incoming messages only: keep `/chat` open, then use a separate Socket.IO
+    client authenticated as another user (that account's token in `auth.token`)
+    to emit `message` with `{ text: "Hello from another user" }` to the backend.
+    The external client sends the event; the chat UI's Send button and Enter key
+    only create local previews and cannot perform this step. Confirm the backend's
+    `new_message` broadcast appears immediately in `/chat` with the other user's
+    username, the correct text and the incoming bubble style. Type a draft in
+    `/chat` and emit more messages from the external client; confirm the draft
     stays intact and new messages scroll into view.

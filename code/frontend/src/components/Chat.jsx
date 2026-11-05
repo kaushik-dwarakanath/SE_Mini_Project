@@ -22,6 +22,7 @@ export default function Chat() {
     const message = {
       id: crypto.randomUUID(),
       username: data.username,
+      isOwn: false,
       text: data.text,
       timestamp: typeof data.timestamp === "string" && !Number.isNaN(Date.parse(data.timestamp))
         ? data.timestamp
@@ -44,7 +45,6 @@ export default function Chat() {
     // Messages stay local until message delivery is integrated separately.
     const message = {
       id: crypto.randomUUID(),
-      username: "You",
       isOwn: true,
       text,
       timestamp: new Date().toISOString(),
@@ -64,9 +64,10 @@ export default function Chat() {
             {connectionStatus}
           </p>
           <p className="chat-preview-note" id="chat-preview-note">
-            Incoming messages appear automatically. Local preview: messages you
-            type are not sent to other users yet. This list clears when you
-            leave or refresh.
+            Incoming messages appear automatically. Local preview: clicking Send
+            or pressing Enter only adds your message in this tab. Your messages
+            are not sent to the server or other users. This list clears when
+            you leave or refresh.
           </p>
         </header>
 
@@ -81,13 +82,13 @@ export default function Chat() {
         >
           {messages.length === 0 ? (
             <p className="empty-message">
-              No messages yet. Type a message below to get started.
+              No messages yet. Type a message below to preview it locally.
             </p>
           ) : (
             messages.map((message) => (
               <article className={`message${message.isOwn ? " message-own" : ""}`} key={message.id}>
                 <div className="message-meta">
-                  <span className="message-sender">{message.username}</span>
+                  <span className="message-sender">{message.isOwn ? "You" : message.username}</span>
                   <time
                     className="message-time"
                     dateTime={message.timestamp}

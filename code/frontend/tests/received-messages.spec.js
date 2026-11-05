@@ -58,6 +58,29 @@ test("keeps local previews and rapid incoming messages in arrival order", async 
   expect(errors).toEqual([]);
 });
 
+test("distinguishes local previews from incoming senders, including a user named You", async ({ page, request }) => {
+  await page.getByLabel("Message", { exact: true }).fill("My local preview");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await deliver(request, [
+    message("Alice", "An incoming message"),
+    { ...message("You", "An incoming user named You"), isOwn: true },
+  ]);
+
+  const own = page.locator(".message-own");
+  const incoming = page.locator(".message:not(.message-own)");
+  await expect(own).toHaveCount(1);
+  await expect(own.locator(".message-sender")).toHaveText("You");
+  await expect(own.locator("p")).toHaveText("My local preview");
+  await expect(incoming.locator(".message-sender")).toHaveText(["Alice", "You"]);
+  await expect(incoming.locator("p")).toHaveText(["An incoming message", "An incoming user named You"]);
+  await expect(own).toHaveCSS("align-self", "flex-end");
+  for (const bubble of await incoming.all()) {
+    await expect(bubble).toHaveCSS("align-self", "auto");
+    expect(await bubble.evaluate((element) => getComputedStyle(element).backgroundColor))
+      .not.toBe(await own.evaluate((element) => getComputedStyle(element).backgroundColor));
+  }
+});
+
 test("renders incoming markup literally and keeps long messages within the scrolling log", async ({ page, request }) => {
   const text = '<img src=x onerror="alert(1)"> Hello 👋 नमस्ते\nSecond line';
   await deliver(request, [
