@@ -38,6 +38,8 @@ venv/
 
 # Test coverage
 coverage/
+playwright-report/
+test-results/
 
 # Temporary files
 tmp/

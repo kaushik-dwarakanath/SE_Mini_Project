@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import Chat from "./components/Chat";
 
 
 function Navbar() {
@@ -212,7 +213,7 @@ function Login() {
 
       // Navigate to the chat page after successful login.
       window.location.href = "/chat";
-    } catch (error) {
+    } catch {
       setError(
         "Unable to connect to the server. Please check that the backend is running."
       );
@@ -280,69 +281,6 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-
-function Chat() {
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([]);
-
-  function handleSubmit(event) {
-    event.preventDefault();
-
-    const text = message.trim();
-
-    if (!text) return;
-
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { id: Date.now(), text },
-    ]);
-
-    setMessage("");
-  }
-
-  return (
-    <main className="page">
-      <section className="chat-card">
-        <div className="chat-header">
-          <h1>Chat Room</h1>
-          <p className="subtitle">Your messages appear here.</p>
-        </div>
-
-        <div className="messages" aria-live="polite">
-          {messages.length === 0 ? (
-            <p className="empty-message">
-              No messages yet. Send a message to get started.
-            </p>
-          ) : (
-            messages.map((item) => (
-              <div className="message" key={item.id}>
-                <span className="message-sender">You</span>
-                <p>{item.text}</p>
-              </div>
-            ))
-          )}
-        </div>
-
-        <form className="message-form" onSubmit={handleSubmit}>
-          <label className="visually-hidden" htmlFor="chat-message">
-            Message
-          </label>
-
-          <input
-            id="chat-message"
-            type="text"
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="Type a message..."
-            autoComplete="off"
-          />
-
-          <button type="submit">Send</button>
-        </form>
-      </section>
-    </main>
-  );
-}
 
 export default function App() {
   return (
