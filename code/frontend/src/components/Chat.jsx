@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import useChatConnection from "../hooks/useChatConnection";
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
@@ -7,11 +7,29 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 export default function Chat() {
-  const connectionStatus = useChatConnection();
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState([]);
   const messageAreaRef = useRef(null);
   const inputRef = useRef(null);
+
+  const handleMessage = useCallback((data) => {
+    if (
+      !data ||
+      typeof data.username !== "string" || !data.username.trim() ||
+      typeof data.text !== "string" || !data.text.trim()
+    ) return;
+
+    const message = {
+      id: crypto.randomUUID(),
+      username: data.username,
+      text: data.text,
+      timestamp: typeof data.timestamp === "string" && !Number.isNaN(Date.parse(data.timestamp))
+        ? data.timestamp
+        : new Date().toISOString(),
+    };
+    setMessages((current) => [...current, message]);
+  }, []);
+  const connectionStatus = useChatConnection(handleMessage);
 
   useEffect(() => {
     const messageArea = messageAreaRef.current;
@@ -26,6 +44,8 @@ export default function Chat() {
     // Messages stay local until message delivery is integrated separately.
     const message = {
       id: crypto.randomUUID(),
+      username: "You",
+      isOwn: true,
       text,
       timestamp: new Date().toISOString(),
     };
@@ -44,8 +64,9 @@ export default function Chat() {
             {connectionStatus}
           </p>
           <p className="chat-preview-note" id="chat-preview-note">
-            Local preview: messages appear only in this tab and clear when you
-            leave or refresh. They are not sent to other users yet.
+            Incoming messages appear automatically. Local preview: messages you
+            type are not sent to other users yet. This list clears when you
+            leave or refresh.
           </p>
         </header>
 
@@ -64,9 +85,9 @@ export default function Chat() {
             </p>
           ) : (
             messages.map((message) => (
-              <article className="message message-own" key={message.id}>
+              <article className={`message${message.isOwn ? " message-own" : ""}`} key={message.id}>
                 <div className="message-meta">
-                  <span className="message-sender">You</span>
+                  <span className="message-sender">{message.username}</span>
                   <time
                     className="message-time"
                     dateTime={message.timestamp}

@@ -25,7 +25,7 @@ local time; long words wrap within the message area.
 
 Messages currently live in React state in this tab. Navigating away or
 refreshing clears them. This interface does not send messages to the server or
-other users. Incoming-message display is tracked in issue #13.
+other users. Incoming messages are displayed as described below.
 
 `src/components/Chat.jsx` owns the chat UI and local state. `src/App.jsx` keeps
 the existing protected route. The client-side token-presence check is only a
@@ -53,8 +53,24 @@ rebuild for a production change. With no override, a production deployment
 must forward `/socket.io` on the page origin to the backend, including
 WebSocket upgrades.
 
-`src/hooks/useChatConnection.js` owns the connection lifecycle. Message
-submission and display still use the existing local preview.
+`src/hooks/useChatConnection.js` owns the connection lifecycle and registers
+the incoming-message listener. Message submission still uses the local preview.
+
+## Received messages (issue #13)
+
+The chat page listens for the backend's `new_message` event and appends each
+message without refreshing. The payload uses `username`, `text` and `timestamp`,
+matching `code/backend/server.js`. Received messages show the sender's username
+and time alongside their text, while local previews remain labelled “You”.
+New arrivals scroll into view without clearing the draft or moving input focus.
+
+Messages without a nonblank string username and text are ignored. Missing or
+invalid timestamps use the receipt time. Usernames and content render as text,
+including markup and Unicode. The listener is removed when leaving chat and
+stays active across reconnections without being registered again.
+
+This change handles live incoming events. Loading `chat_history`, recovering
+messages missed while disconnected and sending messages are separate work.
 
 ## Automated checks
 
@@ -80,11 +96,15 @@ scrolling, repeated messages, refresh, logout and the unauthenticated route.
 Connection tests cover the saved-token handshake, HTTP polling and WebSocket
 proxy, pending/failed connections, authentication rejection, automatic recovery,
 server disconnects, navigation/logout cleanup and cancelled retries.
+Received-message tests cover sender/content/time, live arrivals, ordering,
+repeated messages, draft and focus preservation, literal markup/Unicode,
+long messages, scrolling, malformed payloads and listener cleanup/reconnection.
 
 The test server uses the backend's installed Socket.IO package with test-only
 token checks. Tests do not require MongoDB or a running application backend,
 and do not test production JWT validation, registration/login requests,
-database persistence or real-time message delivery.
+database persistence or production message broadcasting. Incoming-message tests
+emit the backend's event payload through the real Socket.IO transport.
 
 ## Manual review
 
@@ -109,3 +129,8 @@ database persistence or real-time message delivery.
 10. Test an expired or invalid login token. Confirm the page reports a rejected
     connection and logout still works. Log in again with a valid account and
     confirm the connection succeeds.
+11. With `/chat` open, use an authenticated Socket.IO client to emit
+    `message` with `{ text: "Hello from another user" }` to the backend. Confirm
+    it appears immediately with that user's username and the correct text.
+    Type a draft and send more messages from the other client; confirm the draft
+    stays intact and new messages scroll into view.

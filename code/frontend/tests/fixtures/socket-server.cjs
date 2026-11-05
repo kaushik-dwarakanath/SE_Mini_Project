@@ -34,6 +34,18 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/test/messages") {
+    let body = "";
+    request.on("data", (chunk) => { body += chunk; });
+    request.on("end", () => {
+      for (const message of JSON.parse(body)) {
+        for (const socket of sockets) socket.emit("new_message", message);
+      }
+      response.end("{}");
+    });
+    return;
+  }
+
   response.writeHead(404);
   response.end("{}");
 });
