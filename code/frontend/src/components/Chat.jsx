@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useChatConnection from "../hooks/useChatConnection";
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -6,6 +7,7 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 export default function Chat() {
+  const connectionStatus = useChatConnection();
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState([]);
   const messageAreaRef = useRef(null);
@@ -21,7 +23,7 @@ export default function Chat() {
     const text = draft.trim();
     if (!text) return;
 
-    // Local UI state for issue #11. Server delivery is added in #12 and #13.
+    // Messages stay local until message delivery is integrated separately.
     const message = {
       id: crypto.randomUUID(),
       text,
@@ -38,6 +40,9 @@ export default function Chat() {
         <header className="chat-header">
           <h1 id="chat-title">Chat Room</h1>
           <p className="subtitle">A place to share a message.</p>
+          <p className="subtitle" role="status" aria-atomic="true">
+            {connectionStatus}
+          </p>
           <p className="chat-preview-note" id="chat-preview-note">
             Local preview: messages appear only in this tab and clear when you
             leave or refresh. They are not sent to other users yet.

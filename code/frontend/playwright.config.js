@@ -11,8 +11,15 @@ export default defineConfig({
     { name: "desktop", use: { browserName: "chromium", viewport: { width: 1280, height: 800 } } },
     { name: "mobile", use: { browserName: "chromium", viewport: { width: 320, height: 640 } } },
   ],
-  webServer: {
-    command: "npm run dev -- --host 127.0.0.1 --port 5174 --strictPort",
-    url: "http://127.0.0.1:5174",
-  },
+  webServer: [
+    {
+      command: "node tests/fixtures/socket-server.cjs",
+      url: "http://127.0.0.1:5000/api/health",
+    },
+    {
+      command: "npm run dev -- --host 127.0.0.1 --port 5174 --strictPort",
+      url: "http://127.0.0.1:5174",
+      env: { VITE_SOCKET_URL: "" },
+    },
+  ],
 });
