@@ -1,147 +1,45 @@
+require('dotenv').config({ path: require('node:path').join(__dirname, '.env'), quiet: true });
+const mongoose = require('mongoose');
+const { createApplication } = require('./app');
+const { migrateEmails } = require('./lib/privacy');
+const User = require('./models/User');
+const Message = require('./models/Message');
+const Session = require('./models/Session');
 
-require("dotenv").config();
-
-const express = require("express");
-const mongoose = require("mongoose");
-const authRoutes = require("./routes/auth");
-const http = require("http");
-const { Server } = require("socket.io");
-const jwt = require("jsonwebtoken");
-const User = require("./models/User");
-
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-const server = http.createServer(app);
-
-const io = new Server(server, {
-    cors: {
-        origin: [
-            "http://localhost:5173",
-            "http://localhost:3000"
-        ],
-        methods: ["GET", "POST"]
+async function startServer() {
+    if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required');
+    if (process.env.NODE_ENV === 'production' && !process.env.PUBLIC_ORIGIN?.startsWith('https://')) {
+        throw new Error('Production requires an HTTPS PUBLIC_ORIGIN');
     }
-});
-
-const messages = [];
-
-app.use(express.json());
-
-app.get("/api/health", (req, res) => {
-    res.status(200).json({
-        status: "OK",
-        message: "Backend server is running"
+    const runtime = createApplication({
+        secret: process.env.JWT_SECRET,
+        dataKey: process.env.DATA_ENCRYPTION_KEY,
+        publicOrigin: process.env.PUBLIC_ORIGIN || undefined,
+        trustProxy: process.env.TRUST_PROXY === '1' ? 1 : false,
     });
-});
-
-app.use("/", authRoutes);
-
-io.use(async (socket, next) => {
-    try {
-        const token = socket.handshake.auth?.token;
-
-        if (!token) {
-            return next(new Error("Authentication required"));
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.userId || decoded.sub;
-
-        const user = await User.findById(userId).select("username");
-
-        if (!user) {
-            return next(new Error("User not found"));
-        }
-
-        socket.data.user = {
-            id: user._id.toString(),
-            username: user.username
-        };
-
-        next();
-    } catch (error) {
-        next(new Error("Invalid authentication token"));
-    }
-});
-
-
-io.on("connection", (socket) => {
-    console.log(
-        "Client connected:",
-        socket.data.user.username,
-        socket.id
-    );
-
-    // Send previous messages to the newly connected client
-    socket.emit("chat_history", messages);
-
-    socket.on("message", (data) => {
-        if (
-            !data ||
-            typeof data.text !== "string" ||
-            !data.text.trim()
-        ) {
-            socket.emit("message_error", {
-                message: "Message text is required"
-            });
-            return;
-        }
-
-        const message = {
-            text: data.text.trim(),
-            senderId: socket.data.user.id,
-            username: socket.data.user.username,
-            timestamp: new Date().toISOString()
-        };
-
-        // Store the message on the server
-        messages.push(message);
-
-        console.log("Message received:", message);
-
-        // Send the new message to all connected clients
-        io.emit("new_message", message);
+    await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+    await Promise.all([User.init(), Message.init(), Session.init()]);
+    await migrateEmails(runtime.privacy);
+    const port = Number(process.env.PORT || 5000);
+    const host = process.env.HOST || '127.0.0.1';
+    await new Promise((resolve, reject) => {
+        runtime.server.once('error', reject);
+        runtime.server.listen(port, host, resolve);
     });
-
-    socket.on("disconnect", (reason) => {
-        console.log(
-            "Client disconnected:",
-            socket.id,
-            "Reason:",
-            reason
-        );
-    });
-});
-
-const startServer = async () => {
-    try {
-        if (!process.env.MONGODB_URI) {
-            throw new Error("MONGODB_URI is not configured");
-        }
-
-        await mongoose.connect(process.env.MONGODB_URI);
-        console.log("MongoDB connected successfully");
-
-        await mongoose.connection.db.admin().ping();
-
-        await mongoose.connection.db.collection("users").createIndex(
-            { username: 1 },
-            { unique: true }
-        );
-
-        await mongoose.connection.db.collection("users").createIndex(
-            { email: 1 },
-            { unique: true }
-        );
-
-        server.listen(PORT, () => {
-            console.log(`Server running at http://localhost:${PORT}`);
-        });
-    } catch (error) {
-        console.error("Startup failed:", error.message);
+    console.log(`SimpleChat listening on port ${port}`);
+    const shutdown = () => {
+        runtime.io.close(async () => { await mongoose.disconnect(); process.exit(0); });
+        setTimeout(() => process.exit(1), 10000).unref();
+    };
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
+    return runtime;
+}
+if (require.main === module) {
+    startServer().catch((error) => {
+        // Configuration messages are safe; driver errors may include credentials.
+        console.error('Startup failed:', error.name === 'Error' ? error.message : error.name);
         process.exit(1);
-    }
-};
-
-startServer();
+    });
+}
+module.exports = { startServer };
