@@ -25,7 +25,7 @@ local time; long words wrap within the message area.
 
 Messages currently live in React state in this tab. Navigating away or
 refreshing clears them. This interface does not send messages to the server or
-other users. Incoming-message display is tracked in issue #13.
+other users. Incoming messages are displayed as described below.
 
 `src/components/Chat.jsx` owns the chat UI and local state. `src/App.jsx` keeps
 the existing protected route. The client-side token-presence check is only a
@@ -53,8 +53,26 @@ rebuild for a production change. With no override, a production deployment
 must forward `/socket.io` on the page origin to the backend, including
 WebSocket upgrades.
 
-`src/hooks/useChatConnection.js` owns the connection lifecycle. Message
-submission and display still use the existing local preview.
+`src/hooks/useChatConnection.js` owns the connection lifecycle and registers
+the incoming-message listener. Message submission still uses the local preview.
+
+## Received messages (issue #13)
+
+The chat page listens for the backend's `new_message` event and appends each
+message without refreshing. The payload uses `username`, `text` and `timestamp`,
+matching `code/backend/server.js`. Received messages show the sender's username
+and time alongside their text, while local previews remain labelled “You”.
+Only local previews use the outgoing bubble style; incoming messages keep the
+incoming style even if the sender's username is “You”.
+New arrivals scroll into view without clearing the draft or moving input focus.
+
+Messages without a nonblank string username and text are ignored. Missing or
+invalid timestamps use the receipt time. Usernames and content render as text,
+including markup and Unicode. The listener is removed when leaving chat and
+stays active across reconnections without being registered again.
+
+This change handles live incoming events. Loading `chat_history`, recovering
+messages missed while disconnected and sending messages are separate work.
 
 ## Automated checks
 
@@ -80,11 +98,17 @@ scrolling, repeated messages, refresh, logout and the unauthenticated route.
 Connection tests cover the saved-token handshake, HTTP polling and WebSocket
 proxy, pending/failed connections, authentication rejection, automatic recovery,
 server disconnects, navigation/logout cleanup and cancelled retries.
+Received-message tests cover sender/content/time, incoming and local-preview
+labels and bubble styles (including an incoming username of “You”), live
+arrivals, ordering, repeated messages, draft and focus preservation, literal
+markup/Unicode, long messages, scrolling, malformed payloads and listener
+cleanup/reconnection.
 
 The test server uses the backend's installed Socket.IO package with test-only
 token checks. Tests do not require MongoDB or a running application backend,
 and do not test production JWT validation, registration/login requests,
-database persistence or real-time message delivery.
+database persistence or production message broadcasting. Incoming-message tests
+emit the backend's event payload through the real Socket.IO transport.
 
 ## Manual review
 
@@ -92,8 +116,10 @@ database persistence or real-time message delivery.
 2. Confirm the chat heading, “Connected to server” status, local-preview notice,
    empty state, input and Send button are visible.
 3. Try empty/space-only input; Send should stay disabled.
-4. Send text by clicking Send and by pressing Enter. Check ordering, sender,
-   time, trimmed text and focus returning to the cleared input.
+4. Preview text by clicking Send and by pressing Enter. Confirm it appears only
+   in this tab, labelled “You” with the outgoing bubble style. No message is sent
+   to the backend or other users. Check ordering, time, trimmed text and focus
+   returning to the cleared input.
 5. Try a long word, emoji and text containing HTML characters. Confirm they
    display as text and do not widen the page.
 6. Send enough messages to scroll. Confirm new messages remain visible and
@@ -109,3 +135,12 @@ database persistence or real-time message delivery.
 10. Test an expired or invalid login token. Confirm the page reports a rejected
     connection and logout still works. Log in again with a valid account and
     confirm the connection succeeds.
+11. Test incoming messages only: keep `/chat` open, then use a separate Socket.IO
+    client authenticated as another user (that account's token in `auth.token`)
+    to emit `message` with `{ text: "Hello from another user" }` to the backend.
+    The external client sends the event; the chat UI's Send button and Enter key
+    only create local previews and cannot perform this step. Confirm the backend's
+    `new_message` broadcast appears immediately in `/chat` with the other user's
+    username, the correct text and the incoming bubble style. Type a draft in
+    `/chat` and emit more messages from the external client; confirm the draft
+    stays intact and new messages scroll into view.

@@ -22,6 +22,12 @@ test.describe("local chat interface", () => {
     await expect(page.getByText("No messages yet.", { exact: false })).toBeVisible();
     await expect(page.getByLabel("Message", { exact: true })).toBeVisible();
     await expect(page.getByText("Local preview:", { exact: false })).toBeVisible();
+    await expect(page.locator("#chat-preview-note")).toContainText(
+      "clicking Send or pressing Enter only adds your message in this tab."
+    );
+    await expect(page.getByLabel("Message", { exact: true })).toHaveAccessibleDescription(
+      /Your messages are not sent to the server or other users\./
+    );
     await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
   });
 
