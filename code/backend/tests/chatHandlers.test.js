@@ -3,7 +3,7 @@ process.env.NODE_ENV = "test";
 jest.mock("../services/messageService");
 jest.mock("../utils/logger");
 const messageService = require("../services/messageService");
-const { registerChatHandlers } = require("../sockets/chatHandlers");
+const { registerChatHandlers, MAX_CATCHUP_PAGES } = require("../sockets/chatHandlers");
 
 const makeSocket = (tokenExp = Math.floor(Date.now() / 1000) + 3600) => {
     const handlers = {};
@@ -25,13 +25,16 @@ const makeIo = () => {
     return { to: jest.fn(() => ({ emit })), roomEmit: emit };
 };
 
+const emptyPage = { messages: [], hasMore: false, nextCursor: null };
+
 beforeEach(() => {
     jest.clearAllMocks();
     messageService.getHistory.mockResolvedValue([]);
+    messageService.getMessagesPage.mockResolvedValue(emptyPage);
     messageService.saveMessage.mockImplementation(async (m) => ({ ...m, text: m.content, id: "m1" }));
 });
 
-describe("chat handlers", () => {
+describe("chat handlers: messages", () => {
     test("saves a sanitized message and broadcasts to the room (TC-SEC-03)", async () => {
         const socket = makeSocket();
         const io = makeIo();
@@ -75,14 +78,93 @@ describe("chat handlers", () => {
         expect(socket.disconnect).toHaveBeenCalledWith(true);
         expect(messageService.saveMessage).not.toHaveBeenCalled();
     });
+});
 
-    test("join_room joins and sends history since the given time (TC-REL-01)", async () => {
+describe("chat handlers: join_room and reconnect catch-up (TC-REL-01)", () => {
+    test("join_room without since/cursor sends the latest history", async () => {
+        const socket = makeSocket();
+        registerChatHandlers(makeIo(), socket);
+
+        await socket.handlers.join_room({ roomId: "room-2" });
+
+        expect(socket.join).toHaveBeenCalledWith("room-2");
+        expect(messageService.getHistory).toHaveBeenCalledWith("room-2");
+        expect(messageService.getMessagesPage).not.toHaveBeenCalled();
+    });
+
+    test("join_room with since sends missed messages", async () => {
         const socket = makeSocket();
         registerChatHandlers(makeIo(), socket);
 
         await socket.handlers.join_room({ roomId: "room-2", since: "2026-01-01T00:00:00Z" });
 
         expect(socket.join).toHaveBeenCalledWith("room-2");
-        expect(messageService.getHistory).toHaveBeenCalledWith("room-2", "2026-01-01T00:00:00Z");
+        expect(messageService.getMessagesPage).toHaveBeenCalledWith(
+            "room-2",
+            { since: "2026-01-01T00:00:00Z", cursor: undefined }
+        );
+        expect(socket.emit).toHaveBeenCalledWith("missed_messages", expect.objectContaining({ roomId: "room-2" }));
+    });
+
+    test("keeps fetching pages until nothing more is missed", async () => {
+        messageService.getMessagesPage
+            .mockResolvedValueOnce({ messages: [{ id: "a" }], hasMore: true, nextCursor: "c1" })
+            .mockResolvedValueOnce({ messages: [{ id: "b" }], hasMore: true, nextCursor: "c2" })
+            .mockResolvedValueOnce({ messages: [{ id: "c" }], hasMore: false, nextCursor: "c3" });
+
+        const socket = makeSocket();
+        registerChatHandlers(makeIo(), socket);
+
+        await socket.handlers.join_room({ roomId: "general", cursor: "c0" });
+
+        expect(messageService.getMessagesPage).toHaveBeenNthCalledWith(1, "general", { since: undefined, cursor: "c0" });
+        expect(messageService.getMessagesPage).toHaveBeenNthCalledWith(2, "general", { cursor: "c1" });
+        expect(messageService.getMessagesPage).toHaveBeenNthCalledWith(3, "general", { cursor: "c2" });
+
+        const missed = socket.emit.mock.calls.filter(([event]) => event === "missed_messages");
+        expect(missed).toHaveLength(3);
+        expect(missed.map(([, payload]) => payload.messages[0].id)).toEqual(["a", "b", "c"]);
+        expect(missed[2][1].hasMore).toBe(false);
+    });
+
+    test("stops at the page cap and tells the client how to continue", async () => {
+        messageService.getMessagesPage.mockResolvedValue({
+            messages: [{ id: "x" }], hasMore: true, nextCursor: "next"
+        });
+
+        const socket = makeSocket();
+        registerChatHandlers(makeIo(), socket);
+
+        await socket.handlers.join_room({ roomId: "general", since: "2026-01-01T00:00:00Z" });
+
+        expect(messageService.getMessagesPage).toHaveBeenCalledTimes(MAX_CATCHUP_PAGES);
+
+        const missed = socket.emit.mock.calls.filter(([event]) => event === "missed_messages");
+        const lastPayload = missed[missed.length - 1][1];
+        expect(lastPayload.hasMore).toBe(true);
+        expect(lastPayload.nextCursor).toBe("next");
+    });
+
+    test("reports an invalid cursor to the client", async () => {
+        const err = new Error("Invalid cursor");
+        err.code = "INVALID_PAGINATION";
+        messageService.getMessagesPage.mockRejectedValue(err);
+
+        const socket = makeSocket();
+        registerChatHandlers(makeIo(), socket);
+
+        await socket.handlers.join_room({ roomId: "general", cursor: "garbage" });
+
+        expect(socket.emit).toHaveBeenCalledWith("message_error", expect.any(Object));
+    });
+
+    test("ignores non-string since/cursor values (NoSQL operator objects)", async () => {
+        const socket = makeSocket();
+        registerChatHandlers(makeIo(), socket);
+
+        await socket.handlers.join_room({ roomId: "general", since: { $gt: "" }, cursor: { $ne: "" } });
+
+        expect(messageService.getMessagesPage).not.toHaveBeenCalled();
+        expect(messageService.getHistory).toHaveBeenCalledWith("general");
     });
 });
