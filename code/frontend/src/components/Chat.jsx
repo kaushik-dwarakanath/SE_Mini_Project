@@ -1,100 +1,93 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
+import { request } from '../lib/api';
+import Conversation from './Conversation';
 
-const timeFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-export default function Chat() {
-  const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState([]);
-  const messageAreaRef = useRef(null);
-  const inputRef = useRef(null);
+export default function Chat({ session, onExpired }) {
+  const [users, setUsers] = useState([]);
+  const [query, setQuery] = useState('');
+  const [peer, setPeer] = useState(null);
+  const [error, setError] = useState('');
+  const [hasMore, setHasMore] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [events] = useState(() => new EventTarget());
+  const [unread, setUnread] = useState({});
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
-    const messageArea = messageAreaRef.current;
-    messageArea.scrollTop = messageArea.scrollHeight;
-  }, [messages]);
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const result = await request(`/users?q=${encodeURIComponent(query)}`, { token: session.token, signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setUsers(result.users);
+        setHasMore(result.hasMore);
+        setError('');
+      } catch (failure) {
+        if (controller.signal.aborted) return;
+        if (failure.status === 401) onExpired();
+        else setError(failure.message);
+      }
+    }, 200);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [session.token, query, refresh, revision, onExpired]);
 
-  function handleSubmit(event) {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
+  useEffect(() => {
+    const socket = io({ auth: { token: session.token }, reconnection: true });
+    socket.on('connect', () => { setConnected(true); setRevision((value) => value + 1); });
+    socket.on('disconnect', (reason) => {
+      setConnected(false);
+      if (reason === 'io server disconnect') onExpired();
+    });
+    socket.on('session_expired', onExpired);
+    socket.on('connect_error', (failure) => {
+      setConnected(false);
+      if (failure.data?.code === 'UNAUTHORIZED') onExpired();
+    });
+    socket.on('new_message', (message) => {
+      events.dispatchEvent(new CustomEvent('message', { detail: message }));
+      if (message.senderId !== session.user.id) {
+        setUnread((current) => ({ ...current, [message.senderId]: true }));
+        // A newly registered sender may not yet appear in this device's directory.
+        setRefresh((value) => value + 1);
+      }
+    });
+    return () => { socket.removeAllListeners(); socket.disconnect(); };
+  }, [session, onExpired, events]);
 
-    // Local UI state for issue #11. Server delivery is added in #12 and #13.
-    const message = {
-      id: crypto.randomUUID(),
-      text,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((current) => [...current, message]);
-    setDraft("");
-    inputRef.current.focus();
+  function choose(user) {
+    setPeer(user);
+    setUnread((current) => ({ ...current, [user.id]: false }));
   }
 
-  return (
-    <main className="page chat-page">
-      <section className="chat-card" aria-labelledby="chat-title">
-        <header className="chat-header">
-          <h1 id="chat-title">Chat Room</h1>
-          <p className="subtitle">A place to share a message.</p>
-          <p className="chat-preview-note" id="chat-preview-note">
-            Local preview: messages appear only in this tab and clear when you
-            leave or refresh. They are not sent to other users yet.
-          </p>
-        </header>
-
-        <div
-          className="messages"
-          ref={messageAreaRef}
-          role="log"
-          aria-label="Chat messages"
-          aria-live="polite"
-          aria-relevant="additions"
-          tabIndex={0}
-        >
-          {messages.length === 0 ? (
-            <p className="empty-message">
-              No messages yet. Type a message below to get started.
-            </p>
-          ) : (
-            messages.map((message) => (
-              <article className="message message-own" key={message.id}>
-                <div className="message-meta">
-                  <span className="message-sender">You</span>
-                  <time
-                    className="message-time"
-                    dateTime={message.timestamp}
-                    title={new Date(message.timestamp).toLocaleString()}
-                  >
-                    {timeFormatter.format(new Date(message.timestamp))}
-                  </time>
-                </div>
-                <p>{message.text}</p>
-              </article>
-            ))
-          )}
-        </div>
-
-        <form className="message-form" onSubmit={handleSubmit}>
-          <label className="visually-hidden" htmlFor="chat-message">
-            Message
-          </label>
-          <input
-            ref={inputRef}
-            id="chat-message"
-            type="text"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Type a message..."
-            autoComplete="off"
-            aria-describedby="chat-preview-note"
-          />
-          <button type="submit" disabled={!draft.trim()}>
-            Send
-          </button>
-        </form>
-      </section>
-    </main>
-  );
+  return <main className="page chat-page">
+    <section className="chat-shell" aria-label="Private chat">
+      <aside className="contacts" aria-label="People">
+        <h1>People</h1>
+        <p className="subtitle">Choose someone to start a private conversation.</p>
+        <label htmlFor="contact-search">Search usernames</label>
+        <input id="contact-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={32} />
+        <button className="secondary-button" onClick={() => setRefresh((value) => value + 1)}>Refresh people</button>
+        {error && <p className="notice" role="alert">{error}</p>}
+        <ul className="contact-list">
+          {users.map((user) => <li key={user.id}>
+            <button type="button" className={peer?.id === user.id ? 'contact selected' : 'contact'}
+              aria-pressed={peer?.id === user.id} onClick={() => choose(user)}>
+              {user.username}{unread[user.id] && peer?.id !== user.id && <span className="unread"> · New message</span>}
+            </button>
+          </li>)}
+        </ul>
+        {!users.length && <p className="subtitle">No people found. Ask your friend to register, then refresh this list.</p>}
+        {hasMore && <p className="subtitle">Showing 50 people. Search to narrow the list.</p>}
+      </aside>
+      {peer ? <Conversation key={`${peer.id}:${peer.publicKey}`} peer={peer} session={session} connected={connected}
+        revision={revision} events={events} onExpired={onExpired} onBack={() => setPeer(null)} /> :
+        <section className="chat-card chat-welcome">
+          <h2>Your conversations</h2>
+          <p>Choose a person from the list to send an end-to-end encrypted message.</p>
+          <p className="connection-status" role="status">{connected ? 'Connected' : 'Connecting…'}</p>
+        </section>}
+    </section>
+  </main>;
 }

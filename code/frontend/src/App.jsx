@@ -1,299 +1,64 @@
-import { useState } from "react";
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import Chat from "./components/Chat";
-
-
-function Navbar() {
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    () => Boolean(localStorage.getItem("token"))
-  );
-  const navigate = useNavigate();
-
-  function handleLogout() {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
-    navigate("/login", { replace: true });
-  }
-
-  return (
-    <header className="navbar">
-      <Link to="/login" className="brand">
-        SimpleChat
-      </Link>
-
-      <nav>
-        {!isLoggedIn ? (
-          <>
-            <Link to="/register">Register</Link>
-            <Link to="/login">Login</Link>
-          </>
-        ) : (
-          <>
-            <Link to="/chat">Chat</Link>
-            <button type="button" onClick={handleLogout}>
-              Logout
-            </button>
-          </>
-        )}
-      </nav>
-    </header>
-  );
-}
-
-
-
-function Register() {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
-
-    const cleanUsername = username.trim();
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanUsername || !cleanEmail || !password) {
-      setError("Please fill in all fields.");
-      return;
-    }
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch("/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: cleanUsername,
-          email: cleanEmail,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Registration failed. Please try again.");
-        return;
-      }
-
-      setSuccess("Account created successfully. You can now log in.");
-      setUsername("");
-      setEmail("");
-      setPassword("");
-    } catch {
-      setError(
-        "Unable to connect to the server. Please try again later."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <main className="page">
-      <section className="form-card">
-        <h1>Create an account</h1>
-        <p className="subtitle">Register to get started.</p>
-
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="username">Username</label>
-          <input
-            id="username"
-            type="text"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="Enter username"
-            autoComplete="username"
-            required
-          />
-
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Enter email"
-            autoComplete="email"
-            required
-          />
-
-          <label htmlFor="register-password">Password</label>
-          <input
-            id="register-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 8 characters"
-            autoComplete="new-password"
-            minLength={8}
-            required
-          />
-
-          {error && (
-            <p className="notice" role="alert">
-              {error}
-            </p>
-          )}
-
-          {success && (
-            <p className="notice" role="status">
-              {success}
-            </p>
-          )}
-
-          <button type="submit" disabled={loading}>
-            {loading ? "Registering..." : "Register"}
-          </button>
-        </form>
-
-        <p className="form-footer">
-          Already have an account? <Link to="/login">Login</Link>
-        </p>
-      </section>
-    </main>
-  );
-}
-
-
-function Login() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError("");
-
-    const identifier = username.trim();
-
-    if (!identifier || !password) {
-      setError("Please enter your username/email and password.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch("/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          identifier,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Login failed. Please try again.");
-        return;
-      }
-
-      // Save the JWT for authenticated requests.
-      localStorage.setItem("token", data.token);
-
-      // Navigate to the chat page after successful login.
-      window.location.href = "/chat";
-    } catch {
-      setError(
-        "Unable to connect to the server. Please check that the backend is running."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <main className="page">
-      <section className="form-card">
-        <h1>Welcome back</h1>
-        <p className="subtitle">Login to your account.</p>
-
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="login-username">Username or email</label>
-          <input
-            id="login-username"
-            type="text"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="Enter username or email"
-            autoComplete="username"
-            required
-          />
-
-          <label htmlFor="login-password">Password</label>
-          <input
-            id="login-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Enter password"
-            autoComplete="current-password"
-            required
-          />
-
-          {error && (
-            <p className="notice" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button type="submit" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
-
-        <p className="form-footer">
-          Don't have an account? <Link to="/register">Register</Link>
-        </p>
-      </section>
-    </main>
-  );
-}
-
-
-function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
-
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
-}
-
+import { useCallback, useEffect, useState } from 'react';
+import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import Chat from './components/Chat';
+import AuthForm from './components/AuthForm';
+import { request } from './lib/api';
 
 export default function App() {
-  return (
-    <>
-      <Navbar />
+  // Session tokens and decrypted keys only live in this tab's memory.
+  const [session, setSession] = useState(null);
+  const [notice, setNotice] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const expire = useCallback(() => {
+    setSession(null);
+    setNotice('Your session has ended. Log in to unlock your messages again.');
+  }, []);
 
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>}/>
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </>
-  );
+  useEffect(() => {
+    // Discard credentials written by older versions, even if browser storage is restricted.
+    try { localStorage.removeItem('token'); } catch { /* No persistent session is needed. */ }
+  }, []);
+  useEffect(() => {
+    if (!session) return;
+    const timer = setTimeout(expire, Math.max(0, Date.parse(session.expiresAt) - Date.now()));
+    return () => clearTimeout(timer);
+  }, [session, expire]);
+
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    let message = '';
+    try { await request('/auth/session', { method: 'DELETE', token: session.token }); }
+    catch (error) {
+      if (error.status !== 401) message = 'Signed out on this device. The server was unreachable; its session will expire within one hour.';
+    } finally {
+      setSession(null);
+      setNotice(message);
+      setLoggingOut(false);
+    }
+  }
+  function login(value) { setNotice(''); setSession(value); }
+
+  return <>
+    <header className="navbar">
+      <Link to={session ? '/chat' : '/login'} className="brand">SimpleChat</Link>
+      <nav aria-label="Main navigation">
+        {session ? <>
+          <Link to="/chat">Chat</Link>
+          <span className="signed-in-user">{session.user.username}</span>
+          <button type="button" onClick={logout} disabled={loggingOut}>{loggingOut ? 'Signing out…' : 'Logout'}</button>
+        </> : <>
+          <Link to="/register">Register</Link>
+          <Link to="/login">Login</Link>
+        </>}
+      </nav>
+    </header>
+    <Routes>
+      <Route path="/" element={<Navigate to={session ? '/chat' : '/login'} replace />} />
+      <Route path="/register" element={session ? <Navigate to="/chat" replace /> : <AuthForm key="register" mode="register" />} />
+      <Route path="/login" element={session ? <Navigate to="/chat" replace /> : <AuthForm key="login" mode="login" onLogin={login} notice={notice} />} />
+      <Route path="/chat" element={session ? <Chat session={session} onExpired={expire} /> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={session ? '/chat' : '/login'} replace />} />
+    </Routes>
+  </>;
 }
