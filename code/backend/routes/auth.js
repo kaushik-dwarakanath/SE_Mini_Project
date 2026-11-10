@@ -1,8 +1,8 @@
-
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { signToken } = require("../services/tokenService");
+const logger = require("../utils/logger");
 
 const router = express.Router();
 
@@ -52,8 +52,10 @@ router.post("/register", async (req, res) => {
             password: hashedPassword
         });
 
+        // Return a token so a new user can go straight to chat (NFR-003).
         return res.status(201).json({
             message: "Registration successful",
+            token: signToken(user._id),
             user: {
                 userId: user._id,
                 username: user.username,
@@ -109,37 +111,35 @@ router.post("/login", async (req, res) => {
             ]
         }).select("+password");
 
-        // Use the same response for unknown users and incorrect passwords.
+        // Same response for unknown users and wrong passwords (no user enumeration).
         if (!user) {
+            logger.warn("LOGIN_FAILED", {
+                reason: "unknown user",
+                identifier: value,
+                ip: req.ip
+            });
+
             return res.status(401).json({
                 message: "Invalid username/email or password"
             });
         }
 
-        const passwordMatches = await bcrypt.compare(
-            password,
-            user.password
-        );
+        const passwordMatches = await bcrypt.compare(password, user.password);
 
         if (!passwordMatches) {
+            logger.warn("LOGIN_FAILED", {
+                reason: "bad password",
+                identifier: value,
+                ip: req.ip
+            });
+
             return res.status(401).json({
                 message: "Invalid username/email or password"
             });
         }
 
-        if (!process.env.JWT_SECRET) {
-            console.error("JWT_SECRET is not configured");
-
-            return res.status(500).json({
-                message: "Internal server error"
-            });
-        }
-
-        const token = jwt.sign(
-            { userId: user._id.toString() },
-            process.env.JWT_SECRET,
-            { expiresIn: "1h" }
-        );
+        // signToken throws if JWT_SECRET is missing; the catch below returns a 500.
+        const token = signToken(user._id);
 
         return res.status(200).json({
             message: "Login successful",
