@@ -1,74 +1,28 @@
 # SimpleChat frontend
 
-React and Vite frontend for registration, login and the chat room. See the
-[root README](../../README.md) for backend and MongoDB setup.
-
-## Run locally
-
-Use Node.js 24 and npm. From this directory:
+React/Vite interface for registration, login, people search and encrypted private conversations. Follow the [root README](../../README.md) for MongoDB, backend setup and HTTPS access from different devices.
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Open the URL printed by Vite, normally `http://localhost:5173`. Start the backend
-on port 5000 before registering or logging in.
+Open http://localhost:5173 with the backend running on port 5000. All API requests use `/api`; Socket.IO uses the same origin through the Vite proxy. Optional `API_PROXY_TARGET` changes the backend target.
 
-## Chat interface (issue #11)
+After login, choose another registered username. Send with the button or Enter. Empty messages are rejected; failed sends retain the draft. History loads from MongoDB, with older messages available in pages. The same account can unlock its history on another device with its password. Refresh intentionally returns to login because session tokens and decrypted keys remain only in memory.
 
-After login, `/chat` displays a scrollable message area, a labelled text input
-and a Send button. Click Send or press Enter to add a message. Empty and
-whitespace-only messages are rejected, surrounding whitespace is trimmed, and
-the input clears and regains focus after submitting. Messages show “You” and a
-local time; long words wrap within the message area.
+The UI preserves keyboard labels, literal text rendering, Unicode, long-word wrapping, independent conversation scrolling and a narrow-screen people/conversation switch. Safety numbers and remembered public keys support manual key verification.
 
-Messages currently live in React state in this tab. Navigating away or
-refreshing clears them. This interface does not send messages to the server or
-other users. Socket.IO connection and incoming-message handling are tracked in
-issues #12 and #13.
-
-`src/components/Chat.jsx` owns the chat UI and local state. `src/App.jsx` keeps
-the existing protected route. The client-side token-presence check is only a
-navigation guard; server authentication must still validate JWTs when the
-Socket.IO integration is added.
-
-## Automated checks
+## Checks
 
 ```bash
-npm run lint
 npm run build
 npx playwright install chromium
 npm run test:e2e
 ```
 
-On Linux, install any missing browser system libraries with
-`npx playwright install --with-deps chromium` if prompted.
+Install backend development dependencies first. Playwright starts the real backend on port 5001 with an isolated temporary MongoDB and Vite on 5174. No existing database or credentials are used. Tests cover desktop and 320px mobile layouts, independent users and devices, reconnect recovery, persistent encrypted history, access protection, registration, logout and a lost-response retry.
 
-Playwright starts Vite on port 5174 automatically; keep that port free. The tests
-run in Chromium at desktop (1280 × 800) and narrow mobile (320 × 640) viewport
-sizes. They cover the empty state, Send and Enter submission, blank-message
-rejection, trimming, focus, timestamps, literal markup/Unicode, long words,
-scrolling, repeated messages, refresh, logout and the unauthenticated route.
+Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chrome/Chromium binary instead of Playwright's downloaded browser. The initial MongoDB binary download also needs network access.
 
-Tests set a dummy token to exercise the existing client-side route guard.
-They do not require MongoDB or a running backend, and do not test JWT validity,
-registration/login requests, database persistence or real-time delivery.
-
-## Manual review
-
-1. Start both services using the root README, register an account and log in.
-2. Confirm the chat heading, local-preview notice, empty state, input and Send
-   button are visible.
-3. Try empty/space-only input; Send should stay disabled.
-4. Send text by clicking Send and by pressing Enter. Check ordering, sender,
-   time, trimmed text and focus returning to the cleared input.
-5. Try a long word, emoji and text containing HTML characters. Confirm they
-   display as text and do not widen the page.
-6. Send enough messages to scroll. Confirm new messages remain visible and
-   the input stays outside the scrolling message area.
-7. Check a narrow mobile viewport and keyboard navigation, including focusing
-   and scrolling the message log. Check screen-reader announcements manually
-   with your preferred screen reader.
-8. Refresh to confirm local messages clear; log out and confirm `/chat`
-   redirects to login.
+See [SECURITY.md](../../SECURITY.md) for the cryptography design and limits. HTTPS is necessary on other devices; plain LAN HTTP cannot provide the required Web Crypto APIs.
