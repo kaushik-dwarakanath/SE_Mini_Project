@@ -1,7 +1,7 @@
+
 import { useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import Chat from "./components/Chat";
-
 
 function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(
@@ -39,8 +39,6 @@ function Navbar() {
     </header>
   );
 }
-
-
 
 function Register() {
   const [username, setUsername] = useState("");
@@ -169,12 +167,12 @@ function Register() {
   );
 }
 
-
 function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -208,11 +206,9 @@ function Login() {
         return;
       }
 
-      // Save the JWT for authenticated requests.
       localStorage.setItem("token", data.token);
-
-      // Navigate to the chat page after successful login.
-      window.location.href = "/chat";
+      navigate("/chat", { replace: true });
+      window.location.reload();
     } catch {
       setError(
         "Unable to connect to the server. Please check that the backend is running."
@@ -270,7 +266,6 @@ function Login() {
   );
 }
 
-
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
 
@@ -281,7 +276,6 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-
 export default function App() {
   return (
     <>
@@ -291,7 +285,14 @@ export default function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>}/>
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </>

@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -26,7 +27,10 @@ const io = new Server(server, {
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {
-    res.status(200).json({ status: "OK", message: "Backend server is running" });
+    res.status(200).json({
+        status: "OK",
+        message: "Backend server is running"
+    });
 });
 
 app.use("/", authRoutes);
@@ -39,15 +43,20 @@ io.on("connection", (socket) => {
         username: socket.data.user.username,
         socketId: socket.id
     });
+
     registerChatHandlers(io, socket);
 });
 
 const startServer = async () => {
     try {
-        if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is not configured");
-        if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is not configured");
+        if (!process.env.MONGODB_URI) {
+            throw new Error("MONGODB_URI is not configured");
+        }
 
-        // Mongoose creates the unique indexes declared in User.js automatically.
+        if (!process.env.JWT_SECRET) {
+            throw new Error("JWT_SECRET is not configured");
+        }
+
         await mongoose.connect(process.env.MONGODB_URI);
         console.log("MongoDB connected successfully");
 
