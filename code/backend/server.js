@@ -4,25 +4,17 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const http = require("http");
-const { Server } = require("socket.io");
 
 const authRoutes = require("./routes/auth");
 const messageRoutes = require("./routes/messages");
-const socketAuth = require("./sockets/socketAuth");
-const { registerChatHandlers } = require("./sockets/chatHandlers");
-const logger = require("./utils/logger");
+const { createSocketServer } = require("./sockets");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
 
-const io = new Server(server, {
-    cors: {
-        origin: ["http://localhost:5173", "http://localhost:3000"],
-        methods: ["GET", "POST"]
-    }
-});
+createSocketServer(server);
 
 app.use(express.json());
 
@@ -35,17 +27,6 @@ app.get("/api/health", (req, res) => {
 
 app.use("/", authRoutes);
 app.use("/api/messages", messageRoutes);
-
-io.use(socketAuth);
-
-io.on("connection", (socket) => {
-    logger.info("SOCKET_CONNECTED", {
-        username: socket.data.user.username,
-        socketId: socket.id
-    });
-
-    registerChatHandlers(io, socket);
-});
 
 const startServer = async () => {
     try {
