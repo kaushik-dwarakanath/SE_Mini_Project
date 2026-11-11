@@ -74,6 +74,26 @@ stays active across reconnections without being registered again.
 This change handles live incoming events. Loading `chat_history`, recovering
 messages missed while disconnected and sending messages are separate work.
 
+## Login session and navigation (issue #49)
+
+The app keeps one login session state, provided by
+`src/session/SessionProvider.jsx` and read with `useSession()` from
+`src/session/session.js`. The navbar, Login and Logout all use it:
+
+- When the app loads, the session is read from the saved token in
+  `localStorage`. Refreshing while signed in keeps Chat and Logout in the
+  navbar. A saved JWT whose `exp` time has passed is removed and the visitor
+  starts signed out. Tokens that cannot be decoded are left for the backend
+  to accept or reject.
+- A successful login saves the token and updates the navbar at once, then
+  opens `/chat` without reloading the page. A failed login, a response
+  without a token, or an unreachable server leaves the visitor signed out.
+- Logout clears the token and updates the navbar at once.
+- Signing out in one tab also updates other open tabs.
+
+The session state only controls what the client shows. The backend still
+validates the token on every Socket.IO connection and REST request.
+
 ## Automated checks
 
 ```bash
@@ -103,6 +123,10 @@ labels and bubble styles (including an incoming username of “You”), live
 arrivals, ordering, repeated messages, draft and focus preservation, literal
 markup/Unicode, long messages, scrolling, malformed payloads and listener
 cleanup/reconnection.
+Session tests mock the `/login` response and cover the signed-out and
+signed-in navbar, login without a page reload, failed and token-less logins,
+an unreachable server, refresh, loading a saved or expired session, logout,
+repeated login/logout and sign-out in another tab.
 
 The test server uses the backend's installed Socket.IO package with test-only
 token checks. Tests do not require MongoDB or a running application backend,
