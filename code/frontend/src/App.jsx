@@ -1,12 +1,21 @@
 
 import { useState } from "react";
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
+
 import Chat from "./components/Chat";
+import Profile from "./components/Profile";
 
 function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(
     () => Boolean(localStorage.getItem("token"))
   );
+
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -17,7 +26,7 @@ function Navbar() {
 
   return (
     <header className="navbar">
-      <Link to="/login" className="brand">
+      <Link to={isLoggedIn ? "/chat" : "/login"} className="brand">
         SimpleChat
       </Link>
 
@@ -30,6 +39,7 @@ function Navbar() {
         ) : (
           <>
             <Link to="/chat">Chat</Link>
+            <Link to="/profile">Profile</Link>
             <button type="button" onClick={handleLogout}>
               Logout
             </button>
@@ -93,9 +103,7 @@ function Register() {
       setEmail("");
       setPassword("");
     } catch {
-      setError(
-        "Unable to connect to the server. Please try again later."
-      );
+      setError("Unable to connect to the server. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -283,8 +291,11 @@ export default function App() {
 
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
+
         <Route path="/register" element={<Register />} />
+
         <Route path="/login" element={<Login />} />
+
         <Route
           path="/chat"
           element={
@@ -293,6 +304,16 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </>
