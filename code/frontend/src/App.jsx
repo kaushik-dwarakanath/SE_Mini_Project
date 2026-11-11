@@ -2,16 +2,14 @@
 import { useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import Chat from "./components/Chat";
+import { useSession } from "./session/session";
 
 function Navbar() {
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    () => Boolean(localStorage.getItem("token"))
-  );
+  const { isSignedIn, signOut } = useSession();
   const navigate = useNavigate();
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
+    signOut();
     navigate("/login", { replace: true });
   }
 
@@ -22,7 +20,7 @@ function Navbar() {
       </Link>
 
       <nav>
-        {!isLoggedIn ? (
+        {!isSignedIn ? (
           <>
             <Link to="/register">Register</Link>
             <Link to="/login">Login</Link>
@@ -172,6 +170,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { signIn } = useSession();
   const navigate = useNavigate();
 
   async function handleSubmit(event) {
@@ -206,9 +205,14 @@ function Login() {
         return;
       }
 
-      localStorage.setItem("token", data.token);
+      if (typeof data.token !== "string" || !data.token) {
+        setError("Login failed. Please try again.");
+        return;
+      }
+
+      // Updates the navbar at once; no page reload is needed.
+      signIn(data.token);
       navigate("/chat", { replace: true });
-      window.location.reload();
     } catch {
       setError(
         "Unable to connect to the server. Please check that the backend is running."
