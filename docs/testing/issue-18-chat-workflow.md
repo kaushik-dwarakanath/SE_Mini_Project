@@ -98,7 +98,7 @@ the backend.
   web client, users can register, log in, join and receive messages, but
   cannot send them (D-01).
 - **"Critical bugs are fixed or documented."** D-01 is Critical and is
-  documented in the defect log, with steps, cause and a recommended fix. It
-  needs a separate story because sending messages from the client was planned
+  documented in the defect log, with steps, cause and a recommended fix, and
+  is tracked in issue #63. It needs a separate story because sending messages from the client was planned
   as separate work. D-02 (Serious) was fixed and has regression tests. D-03 to
   D-06 are documented.

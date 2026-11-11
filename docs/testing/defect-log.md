@@ -7,7 +7,7 @@ vulnerability, with no workaround.
 
 | ID | Found in | Severity | Status | Summary |
 | --- | --- | --- | --- | --- |
-| D-01 | #18 | Critical | Open | The chat page does not send messages to the server |
+| D-01 | #18 | Critical | Open, tracked in #63 | The chat page does not send messages to the server |
 | D-02 | #18 | Serious | Fixed in #18 | Opening or refreshing `/login` or `/register` in development returns a 404 |
 | D-03 | #18 | Medium | Open | Chat history is not shown after joining or refreshing |
 | D-04 | #18 | Low | Open, planned in #49 | Login reloads the whole page to update the navigation bar |
@@ -31,7 +31,8 @@ vulnerability, with no workaround.
   the acceptance workflow from login to message exchange. The backend side
   works: `code/backend/tests/chatWorkflow.system.test.js` shows two clients
   exchanging messages through the real server and database.
-- **Recommendation:** Create an issue for the real-time messaging owner. Emit
+- **Tracking:** issue #63.
+- **Recommendation:** Emit
   `message` with `{ text }` from the chat form, show sent messages from the
   `new_message` broadcast instead of the local preview, and show
   `message_error` to the user. Then update the local-preview tests in
