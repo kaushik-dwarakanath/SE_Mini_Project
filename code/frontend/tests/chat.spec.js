@@ -13,7 +13,7 @@ test.describe("local chat interface", () => {
     // Exercise the existing client-side route guard, without claiming JWT validation.
     await page.addInitScript(() => localStorage.setItem("token", "ui-test-token"));
     await page.goto("/chat");
-    await expect(page.getByRole("status")).toHaveText("Connected to server.");
+    await expect(page.getByRole("status", { name: "Connection status" })).toHaveText("Connected to server.");
   });
 
   test("shows the message area, labelled input and local-preview notice", async ({ page }) => {
