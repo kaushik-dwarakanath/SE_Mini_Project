@@ -270,10 +270,14 @@ function Login() {
   );
 }
 
+// Guards /chat with the shared session, so the guard and the navbar always
+// agree. It re-renders when the session changes: signing out (in this tab or
+// another) leaves the chat, and returning to /chat through browser history
+// redirects to Login. The backend still validates the token itself.
 function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
+  const { isSignedIn } = useSession();
 
-  if (!token) {
+  if (!isSignedIn) {
     return <Navigate to="/login" replace />;
   }
 
