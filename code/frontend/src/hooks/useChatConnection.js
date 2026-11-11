@@ -1,35 +1,49 @@
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-export default function useChatConnection(onMessage) {
+export default function useChatConnection(onMessage, onTypingStatus) {
   const [status, setStatus] = useState("Connecting to server…");
+  const socketRef = useRef(null);
 
   useEffect(() => {
     const socket = io(import.meta.env.VITE_SOCKET_URL || undefined, {
       autoConnect: false,
-      auth: (callback) => callback({ token: localStorage.getItem("token") }),
+      auth: (callback) => {
+        callback({
+          token: localStorage.getItem("token"),
+        });
+      },
     });
+
+    socketRef.current = socket;
 
     function handleConnect() {
       setStatus("Connected to server.");
     }
 
     function handleConnectError() {
-      setStatus(socket.active
-        ? "Unable to connect to server. Retrying…"
-        : "Connection rejected. Please log in again.");
+      setStatus(
+        socket.active
+          ? "Unable to connect to server. Retrying…"
+          : "Connection rejected. Please log in again."
+      );
     }
 
     function handleDisconnect() {
-      setStatus(socket.active
-        ? "Disconnected from server. Reconnecting…"
-        : "Disconnected from server. Refresh to reconnect.");
+      setStatus(
+        socket.active
+          ? "Disconnected from server. Reconnecting…"
+          : "Disconnected from server. Refresh to reconnect."
+      );
     }
 
     socket.on("connect", handleConnect);
     socket.on("connect_error", handleConnectError);
     socket.on("disconnect", handleDisconnect);
     socket.on("new_message", onMessage);
+    socket.on("typing_status", onTypingStatus);
+
     socket.connect();
 
     return () => {
@@ -37,9 +51,32 @@ export default function useChatConnection(onMessage) {
       socket.off("connect_error", handleConnectError);
       socket.off("disconnect", handleDisconnect);
       socket.off("new_message", onMessage);
-      socket.disconnect();
-    };
-  }, [onMessage]);
+      socket.off("typing_status", onTypingStatus);
 
-  return status;
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [onMessage, onTypingStatus]);
+
+  const emitTyping = useCallback(() => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit("typing", {
+        roomId: "general",
+      });
+    }
+  }, []);
+
+  const emitStopTyping = useCallback(() => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit("stop_typing", {
+        roomId: "general",
+      });
+    }
+  }, []);
+
+  return {
+    status,
+    emitTyping,
+    emitStopTyping,
+  };
 }
