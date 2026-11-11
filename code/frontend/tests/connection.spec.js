@@ -228,8 +228,8 @@ test("leaving chat cancels pending reconnection attempts", async ({ page }) => {
     page.getByRole("status", { name: "Connection status" })
   ).toHaveText("Unable to connect to server. Retrying…");
 
-  await page.getByRole("link", { name: "SimpleChat" }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await page.getByRole("link", { name: /profile/i }).click();
+await expect(page).toHaveURL(/\/profile$/);
 
   const attemptsAfterLeaving = attempts;
   await page.waitForTimeout(2000);
