@@ -26,6 +26,15 @@ export default function Chat() {
       !data.text.trim()
     ) return;
 
+    const parsedTimestamp = new Date(data.timestamp);
+    const timestamp =
+      data.timestamp !== null &&
+      data.timestamp !== undefined &&
+      data.timestamp !== "" &&
+      Number.isFinite(parsedTimestamp.getTime())
+        ? parsedTimestamp.toISOString()
+        : new Date().toISOString();
+
     setMessages((current) => [
       ...current,
       {
@@ -33,7 +42,7 @@ export default function Chat() {
         username: data.username,
         isOwn: false,
         text: data.text,
-        timestamp: data.timestamp || new Date().toISOString(),
+        timestamp,
       },
     ]);
   }, []);
@@ -56,10 +65,13 @@ export default function Chat() {
           return current;
         }
 
-        return [...current, {
-          userId: data.userId,
-          username: data.username,
-        }];
+        return [
+          ...current,
+          {
+            userId: data.userId,
+            username: data.username,
+          },
+        ];
       }
 
       return current.filter((user) => user.userId !== data.userId);
@@ -72,8 +84,15 @@ export default function Chat() {
     emitStopTyping,
   } = useChatConnection(handleMessage, handleTypingStatus);
 
+  useEffect(() => {
+    clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = null;
+    isTypingRef.current = false;
+  }, [connectionStatus]);
+
   function stopTyping() {
     clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = null;
 
     if (isTypingRef.current) {
       isTypingRef.current = false;
@@ -87,18 +106,10 @@ export default function Chat() {
 
     clearTimeout(typingTimerRef.current);
 
-    if (!value.trim()) {
-      stopTyping();
-      return;
-    }
-
-    // Emit only once when typing begins, not on every keystroke.
     if (!isTypingRef.current) {
-      isTypingRef.current = true;
-      emitTyping();
+      isTypingRef.current = emitTyping();
     }
 
-    // Stop typing after 1.5 seconds of inactivity.
     typingTimerRef.current = setTimeout(stopTyping, 1500);
   }
 
@@ -143,12 +154,18 @@ export default function Chat() {
         <header className="chat-header">
           <h1 id="chat-title">Chat Room</h1>
           <p className="subtitle">A place to share a message.</p>
-          <p className="subtitle" role="status">
+
+          <p
+            className="subtitle"
+            role="status"
+            aria-label="Connection status"
+          >
             {connectionStatus}
           </p>
+
           <p className="chat-preview-note" id="chat-preview-note">
-            Messages sent here are local previews and are not delivered
-            to other users.
+            Local preview: clicking Send or pressing Enter only adds your
+            message in this tab.
           </p>
         </header>
 
@@ -186,7 +203,12 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="typing-indicator" role="status" aria-live="polite">
+        <div
+          className="typing-indicator"
+          role="status"
+          aria-label="Typing status"
+          aria-live="polite"
+        >
           {typingUsers.length > 0 && (
             <p>
               {typingUsers.length === 1
@@ -200,6 +222,11 @@ export default function Chat() {
           <label className="visually-hidden" htmlFor="chat-message">
             Message
           </label>
+
+          <span id="chat-input-description" className="visually-hidden">
+            Your messages are not sent to the server or other users.
+          </span>
+
           <input
             ref={inputRef}
             id="chat-message"
@@ -208,7 +235,9 @@ export default function Chat() {
             onChange={handleDraftChange}
             placeholder="Type a message..."
             autoComplete="off"
+            aria-describedby="chat-input-description"
           />
+
           <button type="submit" disabled={!draft.trim()}>
             Send
           </button>
