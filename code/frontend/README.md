@@ -94,6 +94,18 @@ The app keeps one login session state, provided by
 The session state only controls what the client shows. The backend still
 validates the token on every Socket.IO connection and REST request.
 
+## Chat route guard (issue #50)
+
+The `/chat` route guard (`ProtectedRoute` in `src/App.jsx`) uses the same
+session state as the navbar:
+
+- Without a session, opening `/chat` directly, or reaching it with the
+  browser's Back or Forward buttons after logout, redirects to Login. The
+  chat page is not rendered and no Socket.IO connection is opened.
+- With a session, `/chat` opens and stays open after a refresh.
+- Because the guard follows the session, signing out (in this tab or another)
+  leaves the chat page at once and closes its connection.
+
 ## Automated checks
 
 ```bash
@@ -127,6 +139,9 @@ Session tests mock the `/login` response and cover the signed-out and
 signed-in navbar, login without a page reload, failed and token-less logins,
 an unreachable server, refresh, loading a saved or expired session, logout,
 repeated login/logout and sign-out in another tab.
+Route-guard tests cover direct `/chat` visits with and without a session, an
+expired session, refresh, Back and Forward after logout (checking that the
+chat never renders and its connection closes) and sign-out in another tab.
 
 The test server uses the backend's installed Socket.IO package with test-only
 token checks. Tests do not require MongoDB or a running application backend,
