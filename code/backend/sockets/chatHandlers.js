@@ -6,8 +6,16 @@ const logger = require("../utils/logger");
 const DEFAULT_ROOM = "general";
 const MAX_CATCHUP_PAGES = 10;
 
+// Tracks active typing sockets for each user in each room.
+const activeTypingSockets = new Map();
+
+function getTypingKey(userId, roomId) {
+    return JSON.stringify([userId, roomId]);
+}
+
 const isTokenExpired = (socket) =>
-    Boolean(socket.data.tokenExp) && Date.now() / 1000 >= socket.data.tokenExp;
+    Boolean(socket.data.tokenExp) &&
+    Date.now() / 1000 >= socket.data.tokenExp;
 
 function rejectExpired(socket) {
     logger.warn("SOCKET_TOKEN_EXPIRED", {
@@ -73,6 +81,9 @@ function registerChatHandlers(io, socket) {
 
     let expiryTimer;
 
+    // Rooms in which this particular socket is actively typing.
+    const typingRooms = new Set();
+
     if (socket.data.tokenExp) {
         const ms = Math.max(
             socket.data.tokenExp * 1000 - Date.now(),
@@ -112,6 +123,7 @@ function registerChatHandlers(io, socket) {
     });
 
     // Relay typing status only to other participants in the room.
+    // A user remains typing while at least one of their sockets is typing.
     function relayTyping(roomId, isTyping) {
         if (isTokenExpired(socket)) return rejectExpired(socket);
 
@@ -119,11 +131,48 @@ function registerChatHandlers(io, socket) {
             return;
         }
 
-        socket.to(roomId).emit("typing_status", {
-            userId: socket.data.user.id,
-            username: socket.data.user.username,
-            isTyping
-        });
+        const userId = socket.data.user.id;
+        const key = getTypingKey(userId, roomId);
+
+        let activeSockets = activeTypingSockets.get(key);
+
+        if (isTyping) {
+            if (!activeSockets) {
+                activeSockets = new Set();
+                activeTypingSockets.set(key, activeSockets);
+            }
+
+            const wasInactive = activeSockets.size === 0;
+
+            activeSockets.add(socket.id);
+            typingRooms.add(roomId);
+
+            if (wasInactive) {
+                socket.to(roomId).emit("typing_status", {
+                    userId,
+                    username: socket.data.user.username,
+                    isTyping: true
+                });
+            }
+
+            return;
+        }
+
+        if (!activeSockets || !activeSockets.delete(socket.id)) {
+            return;
+        }
+
+        typingRooms.delete(roomId);
+
+        if (activeSockets.size === 0) {
+            activeTypingSockets.delete(key);
+
+            socket.to(roomId).emit("typing_status", {
+                userId,
+                username: socket.data.user.username,
+                isTyping: false
+            });
+        }
     }
 
     socket.on("typing", (data) => {
@@ -170,12 +219,21 @@ function registerChatHandlers(io, socket) {
         }
     });
 
-    // Socket.IO retains room membership during disconnecting.
+    // Remove only this socket's typing state when it disconnects.
     socket.on("disconnecting", (reason) => {
         clearTimeout(expiryTimer);
 
-        for (const roomId of socket.rooms) {
-            if (roomId !== socket.id) {
+        for (const roomId of typingRooms) {
+            const key = getTypingKey(socket.data.user.id, roomId);
+            const activeSockets = activeTypingSockets.get(key);
+
+            if (!activeSockets) continue;
+
+            activeSockets.delete(socket.id);
+
+            if (activeSockets.size === 0) {
+                activeTypingSockets.delete(key);
+
                 socket.to(roomId).emit("typing_status", {
                     userId: socket.data.user.id,
                     username: socket.data.user.username,
@@ -183,6 +241,8 @@ function registerChatHandlers(io, socket) {
                 });
             }
         }
+
+        typingRooms.clear();
 
         logger.info("SOCKET_DISCONNECTING", {
             socketId: socket.id,

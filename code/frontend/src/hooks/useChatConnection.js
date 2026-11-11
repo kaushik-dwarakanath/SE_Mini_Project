@@ -58,11 +58,16 @@ export default function useChatConnection(onMessage, onTypingStatus) {
     };
   }, [onMessage, onTypingStatus]);
 
-  const emitTyping = useCallback(() => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit("typing", { roomId: "general" });
-    }
-  }, []);
+ const emitTyping = useCallback(() => {
+  const socket = socketRef.current;
+
+  if (!socket?.connected) {
+    return false;
+  }
+
+  socket.emit("typing", { roomId: "general" });
+  return true;
+}, []);
 
   const emitStopTyping = useCallback(() => {
     if (socketRef.current?.connected) {
