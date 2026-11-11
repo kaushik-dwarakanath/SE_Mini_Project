@@ -1,25 +1,23 @@
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
-export default function Profile() {
+export default function Profile({ onSessionExpired }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-
-    if (!token) {
-      navigate("/login", { replace: true });
-      return;
-    }
-
     const controller = new AbortController();
 
     async function fetchProfile() {
       try {
+        if (!token) {
+          onSessionExpired();
+          return;
+        }
+
         const response = await fetch("/api/auth/me", {
           method: "GET",
           headers: {
@@ -28,21 +26,20 @@ export default function Profile() {
           signal: controller.signal,
         });
 
-        const responseText = await response.text();
-
-let data = {};
-try {
-  data = responseText ? JSON.parse(responseText) : {};
-} catch {
-  throw new Error(
-    `Server returned an invalid response (HTTP ${response.status}).`
-  );
-}
-
         if (response.status === 401) {
-          localStorage.removeItem("token");
-          navigate("/login", { replace: true });
+          onSessionExpired();
           return;
+        }
+
+        const responseText = await response.text();
+        let data = {};
+
+        try {
+          data = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          throw new Error(
+            `Server returned an invalid response (HTTP ${response.status}).`
+          );
         }
 
         if (!response.ok) {
@@ -70,7 +67,7 @@ try {
     fetchProfile();
 
     return () => controller.abort();
-  }, [navigate]);
+  }, [onSessionExpired]);
 
   if (loading) {
     return (
@@ -93,9 +90,7 @@ try {
         <p className="subtitle">Your account information.</p>
 
         {error ? (
-          <p className="notice" role="alert">
-            {error}
-          </p>
+          <p className="notice" role="alert">{error}</p>
         ) : user ? (
           <div className="profile-details">
             <div className="profile-field">

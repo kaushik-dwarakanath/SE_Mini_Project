@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import {
   Link,
   Navigate,
@@ -11,16 +11,45 @@ import {
 import Chat from "./components/Chat";
 import Profile from "./components/Profile";
 
-function Navbar() {
+const AuthContext = createContext(null);
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+function AuthProvider({ children }) {
   const [isLoggedIn, setIsLoggedIn] = useState(
     () => Boolean(localStorage.getItem("token"))
   );
 
+  const login = useCallback((token) => {
+    localStorage.setItem("token", token);
+    setIsLoggedIn(true);
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    setIsLoggedIn(false);
+  }, []);
+
+  const authValue = useMemo(
+    () => ({ isLoggedIn, login, logout }),
+    [isLoggedIn, login, logout]
+  );
+
+  return (
+    <AuthContext.Provider value={authValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function Navbar() {
+  const { isLoggedIn, logout } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
+    logout();
     navigate("/login", { replace: true });
   }
 
@@ -81,9 +110,7 @@ function Register() {
     try {
       const response = await fetch("/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: cleanUsername,
           email: cleanEmail,
@@ -150,17 +177,8 @@ function Register() {
             required
           />
 
-          {error && (
-            <p className="notice" role="alert">
-              {error}
-            </p>
-          )}
-
-          {success && (
-            <p className="notice" role="status">
-              {success}
-            </p>
-          )}
+          {error && <p className="notice" role="alert">{error}</p>}
+          {success && <p className="notice" role="status">{success}</p>}
 
           <button type="submit" disabled={loading}>
             {loading ? "Registering..." : "Register"}
@@ -180,6 +198,8 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(event) {
@@ -198,13 +218,8 @@ function Login() {
     try {
       const response = await fetch("/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          identifier,
-          password,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, password }),
       });
 
       const data = await response.json();
@@ -214,9 +229,13 @@ function Login() {
         return;
       }
 
-      localStorage.setItem("token", data.token);
+      if (!data.token) {
+        setError("Login response did not contain an authentication token.");
+        return;
+      }
+
+      login(data.token);
       navigate("/chat", { replace: true });
-      window.location.reload();
     } catch {
       setError(
         "Unable to connect to the server. Please check that the backend is running."
@@ -255,11 +274,7 @@ function Login() {
             required
           />
 
-          {error && (
-            <p className="notice" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <p className="notice" role="alert">{error}</p>}
 
           <button type="submit" disabled={loading}>
             {loading ? "Logging in..." : "Login"}
@@ -275,25 +290,31 @@ function Login() {
 }
 
 function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
+  const { isLoggedIn } = useAuth();
 
-  if (!token) {
+  if (!isLoggedIn) {
     return <Navigate to="/login" replace />;
   }
 
   return children;
 }
 
-export default function App() {
+function AppContent() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSessionExpired = useCallback(() => {
+    logout();
+    navigate("/login", { replace: true });
+  }, [logout, navigate]);
+
   return (
     <>
       <Navbar />
 
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
-
         <Route path="/register" element={<Register />} />
-
         <Route path="/login" element={<Login />} />
 
         <Route
@@ -309,7 +330,7 @@ export default function App() {
           path="/profile"
           element={
             <ProtectedRoute>
-              <Profile />
+              <Profile onSessionExpired={handleSessionExpired} />
             </ProtectedRoute>
           }
         />
@@ -317,5 +338,13 @@ export default function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
