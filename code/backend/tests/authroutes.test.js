@@ -1,3 +1,4 @@
+const jwt = require("jsonwebtoken");
 process.env.JWT_SECRET = "test-secret";
 process.env.NODE_ENV = "test";
 
@@ -169,5 +170,68 @@ describe("POST /login (TC-SEC-04, TC-SEC-06)", () => {
 
         expect(res.status).toBe(400);
         expect(User.findOne).not.toHaveBeenCalled();
+    });
+});
+
+describe("GET /api/auth/me (authenticated profile)", () => {
+    const profileUser = {
+        username: "alice",
+        email: "alice@example.com"
+    };
+
+    const createToken = (options = {}) =>
+        jwt.sign({ userId: "u1" }, process.env.JWT_SECRET, options);
+
+    const mockProfileLookup = (user) => {
+        const lean = jest.fn().mockResolvedValue(user);
+        const select = jest.fn().mockReturnValue({ lean });
+
+        User.findById.mockReturnValue({ select });
+
+        return { select, lean };
+    };
+
+    test("200 returns the exact authenticated user profile without password", async () => {
+        mockProfileLookup(profileUser);
+        const token = createToken({ expiresIn: "1h" });
+
+        const res = await request(app)
+            .get("/api/auth/me")
+            .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+            user: {
+                username: "alice",
+                email: "alice@example.com"
+            }
+        });
+        expect(res.body.user).not.toHaveProperty("password");
+        expect(User.findById).toHaveBeenCalledWith("u1");
+    });
+
+    test("401 when the authentication token is missing", async () => {
+        const res = await request(app)
+            .get("/api/auth/me");
+
+        expect(res.status).toBe(401);
+    });
+
+    test("401 when the authentication token is invalid", async () => {
+        const res = await request(app)
+            .get("/api/auth/me")
+            .set("Authorization", "Bearer invalid-token");
+
+        expect(res.status).toBe(401);
+    });
+
+    test("401 when the authentication token has expired", async () => {
+        const token = createToken({ expiresIn: -1 });
+
+        const res = await request(app)
+            .get("/api/auth/me")
+            .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(401);
     });
 });
