@@ -1,7 +1,9 @@
+
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const { signToken } = require("../services/tokenService");
+const authMiddleware = require("../middleware/authMiddleware");
 const logger = require("../utils/logger");
 
 const router = express.Router();
@@ -43,7 +45,6 @@ router.post("/register", async (req, res) => {
             });
         }
 
-        // Hash the password before storing it.
         const hashedPassword = await bcrypt.hash(password, 12);
 
         const user = await User.create({
@@ -52,7 +53,6 @@ router.post("/register", async (req, res) => {
             password: hashedPassword
         });
 
-        // Return a token so a new user can go straight to chat (NFR-003).
         return res.status(201).json({
             message: "Registration successful",
             token: signToken(user._id),
@@ -103,7 +103,6 @@ router.post("/login", async (req, res) => {
 
         const value = loginIdentifier.trim();
 
-        // Explicitly select the password hash because User.js uses select: false.
         const user = await User.findOne({
             $or: [
                 { username: value },
@@ -111,7 +110,6 @@ router.post("/login", async (req, res) => {
             ]
         }).select("+password");
 
-        // Same response for unknown users and wrong passwords (no user enumeration).
         if (!user) {
             logger.warn("LOGIN_FAILED", {
                 reason: "unknown user",
@@ -124,7 +122,10 @@ router.post("/login", async (req, res) => {
             });
         }
 
-        const passwordMatches = await bcrypt.compare(password, user.password);
+        const passwordMatches = await bcrypt.compare(
+            password,
+            user.password
+        );
 
         if (!passwordMatches) {
             logger.warn("LOGIN_FAILED", {
@@ -138,7 +139,6 @@ router.post("/login", async (req, res) => {
             });
         }
 
-        // signToken throws if JWT_SECRET is missing; the catch below returns a 500.
         const token = signToken(user._id);
 
         return res.status(200).json({
@@ -155,6 +155,34 @@ router.post("/login", async (req, res) => {
 
         return res.status(500).json({
             message: "Internal server error"
+        });
+    }
+});
+
+// Get the currently authenticated user's profile.
+router.get("/api/auth/me", authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select("username email")
+            .lean();
+
+        if (!user) {
+            return res.status(401).json({
+                message: "Authenticated user not found"
+            });
+        }
+
+        return res.status(200).json({
+            user: {
+                username: user.username,
+                email: user.email
+            }
+        });
+    } catch (error) {
+        console.error("Profile retrieval error:", error.message);
+
+        return res.status(500).json({
+            message: "Could not retrieve user profile"
         });
     }
 });
