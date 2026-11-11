@@ -9,17 +9,16 @@ export default function useChatConnection(onMessage, onTypingStatus) {
   useEffect(() => {
     const socket = io(import.meta.env.VITE_SOCKET_URL || undefined, {
       autoConnect: false,
-      auth: (callback) => {
-        callback({
-          token: localStorage.getItem("token"),
-        });
-      },
+      auth: (callback) => callback({
+        token: localStorage.getItem("token"),
+      }),
     });
 
     socketRef.current = socket;
 
     function handleConnect() {
       setStatus("Connected to server.");
+      onTypingStatus({ clearAll: true });
     }
 
     function handleConnectError() {
@@ -28,6 +27,7 @@ export default function useChatConnection(onMessage, onTypingStatus) {
           ? "Unable to connect to server. Retrying…"
           : "Connection rejected. Please log in again."
       );
+      onTypingStatus({ clearAll: true });
     }
 
     function handleDisconnect() {
@@ -36,6 +36,7 @@ export default function useChatConnection(onMessage, onTypingStatus) {
           ? "Disconnected from server. Reconnecting…"
           : "Disconnected from server. Refresh to reconnect."
       );
+      onTypingStatus({ clearAll: true });
     }
 
     socket.on("connect", handleConnect);
@@ -52,7 +53,6 @@ export default function useChatConnection(onMessage, onTypingStatus) {
       socket.off("disconnect", handleDisconnect);
       socket.off("new_message", onMessage);
       socket.off("typing_status", onTypingStatus);
-
       socket.disconnect();
       socketRef.current = null;
     };
@@ -60,23 +60,15 @@ export default function useChatConnection(onMessage, onTypingStatus) {
 
   const emitTyping = useCallback(() => {
     if (socketRef.current?.connected) {
-      socketRef.current.emit("typing", {
-        roomId: "general",
-      });
+      socketRef.current.emit("typing", { roomId: "general" });
     }
   }, []);
 
   const emitStopTyping = useCallback(() => {
     if (socketRef.current?.connected) {
-      socketRef.current.emit("stop_typing", {
-        roomId: "general",
-      });
+      socketRef.current.emit("stop_typing", { roomId: "general" });
     }
   }, []);
 
-  return {
-    status,
-    emitTyping,
-    emitStopTyping,
-  };
+  return { status, emitTyping, emitStopTyping };
 }
