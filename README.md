@@ -100,6 +100,19 @@ The committed `.env.example` must contain placeholders only. Never commit your a
 
 Registration requires `username`, `email`, and `password` in a JSON request body. Passwords must be at least eight characters and should be hashed before storage.
 
+## Backend tests
+
+From `code/backend`:
+
+```bash
+npm install
+npm test
+```
+
+The suite includes unit tests and Socket.IO integration tests that start a
+real Socket.IO server on a random local port. MongoDB is not required.
+Test reports for each testing issue are in [`docs/testing`](docs/testing).
+
 ## Troubleshooting
 
 - **MongoDB connection error:** Check that MongoDB is running and the connection URI is correct.
