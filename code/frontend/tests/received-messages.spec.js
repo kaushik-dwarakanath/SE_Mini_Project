@@ -1,4 +1,5 @@
 
+// tests/received-messages.spec.js
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
@@ -37,6 +38,18 @@ function message(username, text) {
   };
 }
 
+async function mockProfile(page) {
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: { username: "TestUser", email: "test@example.com" },
+      }),
+    })
+  );
+}
+
 test("shows incoming messages with the correct sender, content and time without refreshing", async ({ page, request }) => {
   let navigations = 0;
 
@@ -45,7 +58,6 @@ test("shows incoming messages with the correct sender, content and time without 
   });
 
   const input = page.getByLabel("Message", { exact: true });
-
   await input.fill("Unsent draft");
 
   await deliver(request, [
@@ -65,8 +77,10 @@ test("shows incoming messages with the correct sender, content and time without 
 
   await expect(page.locator(".message-own")).toHaveCount(0);
 
-  await expect(page.locator(".message time").first())
-    .toHaveAttribute("datetime", "2026-11-05T05:00:00.000Z");
+  await expect(page.locator(".message time").first()).toHaveAttribute(
+    "datetime",
+    "2026-11-05T05:00:00.000Z"
+  );
 
   await expect(page.locator(".message time").first()).not.toBeEmpty();
   await expect(page.locator(".empty-message")).toHaveCount(0);
@@ -88,11 +102,7 @@ test("keeps local previews and rapid incoming messages in arrival order", async 
   });
 
   await page.getByLabel("Message", { exact: true }).fill("Local preview");
-
-  await page.getByRole("button", {
-    name: "Send",
-    exact: true,
-  }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
 
   const incoming = Array.from({ length: 20 }, (_, index) =>
     message(
@@ -120,11 +130,7 @@ test("keeps local previews and rapid incoming messages in arrival order", async 
 
 test("distinguishes local previews from incoming senders, including a user named You", async ({ page, request }) => {
   await page.getByLabel("Message", { exact: true }).fill("My local preview");
-
-  await page.getByRole("button", {
-    name: "Send",
-    exact: true,
-  }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
 
   await deliver(request, [
     message("Alice", "An incoming message"),
@@ -169,7 +175,8 @@ test("distinguishes local previews from incoming senders, including a user named
 });
 
 test("renders incoming markup literally and keeps long messages within the scrolling log", async ({ page, request }) => {
-  const text = '<img src=x onerror="alert(1)"> Hello 👋 नमस्ते\nSecond line';
+  const text =
+    '<img src=x onerror="alert(1)"> Hello \u{1F44B} \u0928\u092E\u0938\u094D\u0924\u0947\nSecond line';
 
   await deliver(request, [
     message("<script>Alice</script>", text),
@@ -181,8 +188,9 @@ test("renders incoming markup literally and keeps long messages within the scrol
 
   await expect(page.locator(".message p").first()).toHaveText(text);
 
-  await expect(page.locator(".message-sender").first())
-    .toHaveText("<script>Alice</script>");
+  await expect(page.locator(".message-sender").first()).toHaveText(
+    "<script>Alice</script>"
+  );
 
   const log = page.getByRole("log", {
     name: "Chat messages",
@@ -295,9 +303,18 @@ test("receives each message once after reconnecting and returning to chat", asyn
     "After reconnect",
   ]);
 
-  await page.getByRole("link", { name: "SimpleChat" }).click();
+  // Test the Profile navigation added by this feature branch.
+  await mockProfile(page);
 
-  await expect(page).toHaveURL(/\/login$/);
+  await page.getByRole("link", {
+    name: "Profile",
+    exact: true,
+  }).click();
+
+  await expect(page).toHaveURL(/\/profile$/);
+  await expect(
+    page.getByRole("heading", { name: "My Profile" })
+  ).toBeVisible();
 
   await page.getByRole("link", {
     name: "Chat",
