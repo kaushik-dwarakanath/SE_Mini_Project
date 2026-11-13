@@ -109,8 +109,10 @@ npm install
 npm test
 ```
 
-The suite includes unit tests and Socket.IO integration tests that start a
-real Socket.IO server on a random local port. MongoDB is not required.
+The suite includes unit tests, Socket.IO integration tests that start a real
+Socket.IO server on a random local port, and a workflow system test that uses
+an in-memory MongoDB server (`mongodb-memory-server`). A local MongoDB is not
+required. The first run downloads the MongoDB binary used by that test.
 Test reports for each testing issue are in [`docs/testing`](docs/testing).
 
 ## Troubleshooting

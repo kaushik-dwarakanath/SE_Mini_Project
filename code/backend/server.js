@@ -1,32 +1,17 @@
 
 require("dotenv").config();
 
-const express = require("express");
 const mongoose = require("mongoose");
 const http = require("http");
 
-const authRoutes = require("./routes/auth");
-const messageRoutes = require("./routes/messages");
+const { createApp } = require("./app");
 const { createSocketServer } = require("./sockets");
 
-const app = express();
 const PORT = process.env.PORT || 5000;
 
-const server = http.createServer(app);
+const server = http.createServer(createApp());
 
 createSocketServer(server);
-
-app.use(express.json());
-
-app.get("/api/health", (req, res) => {
-    res.status(200).json({
-        status: "OK",
-        message: "Backend server is running"
-    });
-});
-
-app.use("/", authRoutes);
-app.use("/api/messages", messageRoutes);
 
 const startServer = async () => {
     try {
