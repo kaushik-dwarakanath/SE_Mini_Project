@@ -10,26 +10,26 @@ test("redirects unauthenticated visitors to login", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Create an account" })).toBeVisible();
 });
 
-test.describe("local chat interface", () => {
+test.describe("chat interface", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("token", "ui-test-token"));
+    await page.addInitScript(() => localStorage.setItem("token", "ui-test-.eyJ1c2VySWQiOiJ1aS10ZXN0LXRva2VuIn0.test"));
     await page.goto("/chat");
     await expect(page.getByRole("status", { name: "Connection status" })).toHaveText("Connected to server.");
   });
 
-  test("shows the message area, labelled input and local-preview notice", async ({ page }) => {
+  test("shows the message area, labelled input and room notice", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Chat Room" })).toBeVisible();
     await expect(page.getByRole("log", { name: "Chat messages" })).toBeVisible();
     await expect(page.getByText("No messages yet.", { exact: false })).toBeVisible();
     await expect(page.getByLabel("Message", { exact: true })).toBeVisible();
-    await expect(page.getByText("Local preview:", { exact: false })).toBeVisible();
+    await expect(page.getByText("Messages are sent to everyone in the room.", { exact: true })).toBeVisible();
 
     await expect(page.locator("#chat-preview-note")).toContainText(
-      "clicking Send or pressing Enter only adds your message in this tab."
+      "Messages are sent to everyone in the room."
     );
 
     await expect(page.getByLabel("Message", { exact: true })).toHaveAccessibleDescription(
-      /Your messages are not sent to the server or other users\./
+      /Press Enter or Send to share your message with the room\./
     );
 
     await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();

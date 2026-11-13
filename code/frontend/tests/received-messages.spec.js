@@ -1,12 +1,13 @@
 
 // tests/received-messages.spec.js
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 let token;
 
 test.beforeEach(async ({ page }) => {
-  token = `ui-test-${randomUUID()}`;
+  token = `ui-test-.${Buffer.from(JSON.stringify({ userId: randomUUID() })).toString("base64url")}.test`;
 
   await page.addInitScript(
     (value) => localStorage.setItem("token", value),
@@ -103,6 +104,8 @@ test("keeps local previews and rapid incoming messages in arrival order", async 
 
   await page.getByLabel("Message", { exact: true }).fill("Local preview");
   await page.getByRole("button", { name: "Send", exact: true }).click();
+
+  await expect(page.locator(".message p")).toHaveText(["Local preview"]);
 
   const incoming = Array.from({ length: 20 }, (_, index) =>
     message(

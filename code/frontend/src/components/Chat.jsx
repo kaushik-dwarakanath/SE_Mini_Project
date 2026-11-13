@@ -8,6 +8,7 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 export default function Chat() {
+  const [sendError, setSendError] = useState("");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
@@ -17,7 +18,7 @@ export default function Chat() {
   const typingTimerRef = useRef(null);
   const isTypingRef = useRef(false);
 
-  const handleMessage = useCallback((data) => {
+  const handleMessage = useCallback((data, isOwn = false) => {
     if (
       !data ||
       typeof data.username !== "string" ||
@@ -40,7 +41,7 @@ export default function Chat() {
       {
         id: crypto.randomUUID(),
         username: data.username,
-        isOwn: false,
+        isOwn,
         text: data.text,
         timestamp,
       },
@@ -56,7 +57,10 @@ export default function Chat() {
     if (
       !data ||
       typeof data.userId !== "string" ||
-      typeof data.username !== "string"
+      !data.userId.trim() ||
+      typeof data.username !== "string" ||
+      !data.username.trim() ||
+      typeof data.isTyping !== "boolean"
     ) return;
 
     setTypingUsers((current) => {
@@ -82,7 +86,8 @@ export default function Chat() {
     status: connectionStatus,
     emitTyping,
     emitStopTyping,
-  } = useChatConnection(handleMessage, handleTypingStatus);
+    sendMessage,
+  } = useChatConnection(handleMessage, handleTypingStatus, setSendError);
 
   useEffect(() => {
     clearTimeout(typingTimerRef.current);
@@ -106,6 +111,11 @@ export default function Chat() {
 
     clearTimeout(typingTimerRef.current);
 
+    if (!value.trim()) {
+      stopTyping();
+      return;
+    }
+
     if (!isTypingRef.current) {
       isTypingRef.current = emitTyping();
     }
@@ -121,15 +131,11 @@ export default function Chat() {
 
     stopTyping();
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        isOwn: true,
-        text,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+    setSendError("");
+    if (!sendMessage(text)) {
+      setSendError("You are offline. Reconnect before sending your message.");
+      return;
+    }
 
     setDraft("");
     inputRef.current?.focus();
@@ -164,8 +170,7 @@ export default function Chat() {
           </p>
 
           <p className="chat-preview-note" id="chat-preview-note">
-            Local preview: clicking Send or pressing Enter only adds your
-            message in this tab.
+            Messages are sent to everyone in the room.
           </p>
         </header>
 
@@ -218,13 +223,15 @@ export default function Chat() {
           )}
         </div>
 
+        {sendError && <p role="alert">{sendError}</p>}
+
         <form className="message-form" onSubmit={handleSubmit}>
           <label className="visually-hidden" htmlFor="chat-message">
             Message
           </label>
 
           <span id="chat-input-description" className="visually-hidden">
-            Your messages are not sent to the server or other users.
+            Press Enter or Send to share your message with the room.
           </span>
 
           <input

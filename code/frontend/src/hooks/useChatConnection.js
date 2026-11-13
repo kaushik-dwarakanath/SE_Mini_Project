@@ -2,7 +2,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-export default function useChatConnection(onMessage, onTypingStatus) {
+// Decoding is only for display ownership. The server verifies the JWT.
+function currentUserId() {
+  try {
+    const payload = localStorage.getItem("token").split(".")[1];
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))).userId;
+  } catch {
+    return null;
+  }
+}
+
+export default function useChatConnection(onMessage, onTypingStatus, onMessageError) {
   const [status, setStatus] = useState("Connecting to server…");
   const socketRef = useRef(null);
 
@@ -39,11 +49,21 @@ export default function useChatConnection(onMessage, onTypingStatus) {
       onTypingStatus({ clearAll: true });
     }
 
+    const userId = currentUserId();
+    const handleMessage = (data) => onMessage(data, Boolean(userId && data?.senderId === userId));
+    const handleTyping = (data) => {
+      if (data?.userId !== userId) onTypingStatus(data);
+    };
+    function handleMessageError(data) {
+      onMessageError(typeof data?.message === "string" ? data.message : "Message could not be sent.");
+    }
+
+    socket.on("message_error", handleMessageError);
     socket.on("connect", handleConnect);
     socket.on("connect_error", handleConnectError);
     socket.on("disconnect", handleDisconnect);
-    socket.on("new_message", onMessage);
-    socket.on("typing_status", onTypingStatus);
+    socket.on("new_message", handleMessage);
+    socket.on("typing_status", handleTyping);
 
     socket.connect();
 
@@ -51,23 +71,27 @@ export default function useChatConnection(onMessage, onTypingStatus) {
       socket.off("connect", handleConnect);
       socket.off("connect_error", handleConnectError);
       socket.off("disconnect", handleDisconnect);
-      socket.off("new_message", onMessage);
-      socket.off("typing_status", onTypingStatus);
+      socket.off("new_message", handleMessage);
+      socket.off("typing_status", handleTyping);
+      socket.off("message_error", handleMessageError);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [onMessage, onTypingStatus]);
+  }, [onMessage, onTypingStatus, onMessageError]);
 
- const emitTyping = useCallback(() => {
-  const socket = socketRef.current;
+  const emitTyping = useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return false;
+    socket.emit("typing", { roomId: "general" });
+    return true;
+  }, []);
 
-  if (!socket?.connected) {
-    return false;
-  }
-
-  socket.emit("typing", { roomId: "general" });
-  return true;
-}, []);
+  const sendMessage = useCallback((text) => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return false;
+    socket.emit("message", { roomId: "general", text });
+    return true;
+  }, []);
 
   const emitStopTyping = useCallback(() => {
     if (socketRef.current?.connected) {
@@ -75,5 +99,5 @@ export default function useChatConnection(onMessage, onTypingStatus) {
     }
   }, []);
 
-  return { status, emitTyping, emitStopTyping };
+  return { status, emitTyping, emitStopTyping, sendMessage };
 }
