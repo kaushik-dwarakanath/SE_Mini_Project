@@ -214,3 +214,47 @@ body {
     padding: 0 16px;
   }
 }
+/* Shared account pages and navigation. */
+:root {
+  font-family: system-ui, sans-serif;
+  color: #17233b;
+  background: #f4f6fb;
+  --border: #dce2eb;
+  --muted: #57657a;
+  --primary: #2459bd;
+}
+a { color: var(--primary); }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { opacity: .55; cursor: default; }
+.navbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 24px; background: white; border-bottom: 1px solid var(--border); }
+.brand { font-weight: 750; text-decoration: none; }
+.navbar nav { display: flex; align-items: center; gap: 16px; }
+.page { max-width: 800px; margin: 24px auto; padding: 0 16px; }
+.form-card, .profile-card, .chat-card { min-width: 0; padding: 24px; background: white; border: 1px solid var(--border); border-radius: 12px; }
+.form-card, .profile-card { max-width: 440px; margin: auto; }
+.form-card form { display: grid; gap: 12px; }
+.form-card input { min-width: 0; width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
+.subtitle, .chat-preview-note { color: var(--muted); }
+.notice, [role="alert"] { overflow-wrap: anywhere; color: #9e2525; }
+.profile-avatar { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: #edf3ff; color: var(--primary); font-size: 24px; }
+.profile-details { display: grid; gap: 18px; margin: 24px 0; }
+.profile-field { display: grid; gap: 5px; overflow-wrap: anywhere; }
+.profile-field span { color: var(--muted); }
+.typing-indicator { min-height: 24px; color: var(--muted); overflow-wrap: anywhere; }
+.typing-indicator p { margin: 0 0 8px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 520px) {
+  .navbar { padding: 12px; gap: 8px; }
+  .navbar nav { gap: 10px; }
+  .page { margin: 12px auto; }
+  .form-card, .profile-card, .chat-card { padding: 14px; }
+}
+
+/* Keep the composer visible while the log grows. */
+.chat-card { display: flex; flex-direction: column; height: calc(100dvh - 130px); min-height: 420px; }
+.chat-card .messages { flex: 1; min-height: 100px; max-height: none; }
+.chat-header p { margin: 8px 0; }
+@media (max-width: 520px) {
+  .chat-card { height: calc(100dvh - 120px); min-height: 400px; }
+}

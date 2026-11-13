@@ -97,6 +97,8 @@ The committed `.env.example` must contain placeholders only. Never commit your a
 | GET    | `/api/health` | Check backend status |
 | POST   | `/register`   | Register a user      |
 | POST   | `/login`      | Log in               |
+| GET    | `/api/auth/me` | Read current username/email (JWT required) |
+| GET    | `/api/messages/:roomId` | Read room history (JWT required) |
 
 Registration requires `username`, `email`, and `password` in a JSON request body. Passwords must be at least eight characters and should be hashed before storage.
 
@@ -125,3 +127,9 @@ Test reports for each testing issue are in [`docs/testing`](docs/testing).
 - Keep `.env` files and credentials out of Git.
 - Commit `.env.example` with placeholder values only.
 - Do not commit `node_modules`, build output, logs, or local editor files.
+
+## Assigned-story verification
+
+Typing and profile completion, review findings, acceptance criteria and known
+project gaps are documented in [the review report](docs/testing/darshil-assigned-stories-review.md).
+See [frontend checks](code/frontend/README.md#automated-checks) for both browser suites.

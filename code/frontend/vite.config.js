@@ -11,9 +11,19 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      "/login": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        bypass(req) {
+          if (req.method === "GET") return "/index.html";
+        },
+      },
       "/register": {
         target: "http://localhost:5000",
         changeOrigin: true,
+        bypass(req) {
+          if (req.method === "GET") return "/index.html";
+        },
       },
       "/api": {
         target: "http://localhost:5000",
