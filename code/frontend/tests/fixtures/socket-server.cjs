@@ -62,3 +62,13 @@ io.use((socket, next) => {
 });
 
 server.listen(5000, "127.0.0.1");
+
+// Echo outgoing messages only to this test's client. Real multi-user behaviour
+// is exercised separately using the production chat handlers.
+io.on("connection", (socket) => {
+  socket.on("message", ({ text }) => {
+    let senderId;
+    try { senderId = JSON.parse(Buffer.from(socket.handshake.auth.token.split(".")[1], "base64url")).userId; } catch { senderId = socket.handshake.auth.token; }
+    socket.emit("new_message", { senderId, username: "TestUser", text, timestamp: new Date().toISOString() });
+  });
+});

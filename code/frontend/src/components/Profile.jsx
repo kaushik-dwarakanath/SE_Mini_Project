@@ -48,7 +48,12 @@ export default function Profile({ onSessionExpired }) {
           );
         }
 
-        if (!data.user) {
+        if (
+          typeof data?.user?.username !== "string" ||
+          !data.user.username.trim() ||
+          typeof data.user.email !== "string" ||
+          !data.user.email.trim()
+        ) {
           throw new Error("Invalid profile response.");
         }
 

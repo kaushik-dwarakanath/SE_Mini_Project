@@ -219,6 +219,10 @@ function registerChatHandlers(io, socket) {
         }
     });
 
+    socket.on("disconnect", (reason) => {
+        logger.info("SOCKET_DISCONNECTED", { socketId: socket.id, reason });
+    });
+
     // Remove only this socket's typing state when it disconnects.
     socket.on("disconnecting", (reason) => {
         clearTimeout(expiryTimer);

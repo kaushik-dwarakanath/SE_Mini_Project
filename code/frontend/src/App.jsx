@@ -13,7 +13,7 @@ import Profile from "./components/Profile";
 
 const AuthContext = createContext(null);
 
-export function useAuth() {
+function useAuth() {
   return useContext(AuthContext);
 }
 
