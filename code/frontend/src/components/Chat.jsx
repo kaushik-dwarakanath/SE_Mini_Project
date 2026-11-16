@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import useChatConnection from "../hooks/useChatConnection";
 
@@ -6,6 +5,19 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit",
 });
+
+const TOKEN_KEY = "token"; // use the key name you saw in DevTools → Local Storage
+
+// The JWT payload contains userId, so we can tell which history messages are ours.
+function getCurrentUserId() {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(payload)).userId;
+  } catch {
+    return null;
+  }
+}
 
 export default function Chat() {
   const [sendError, setSendError] = useState("");
@@ -36,16 +48,15 @@ export default function Chat() {
         ? parsedTimestamp.toISOString()
         : new Date().toISOString();
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        username: data.username,
-        isOwn,
-        text: data.text,
-        timestamp,
-      },
-    ]);
+    setMessages((current) => {
+      const id = typeof data.id === "string" ? data.id : crypto.randomUUID();
+      if (current.some((message) => message.id === id)) return current;
+
+      return [
+        ...current,
+        { id, username: data.username, isOwn, text: data.text, timestamp },
+      ];
+    });
   }, []);
 
   const handleTypingStatus = useCallback((data) => {
@@ -152,6 +163,51 @@ export default function Chat() {
     return () => {
       clearTimeout(typingTimerRef.current);
     };
+  }, []);
+
+    useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+
+    const controller = new AbortController();
+    const currentUserId = getCurrentUserId();
+
+    fetch("/api/messages/general", {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then((res) =>
+        res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))
+      )
+      .then((data) => {
+        const history = (data.messages || [])
+          .filter(
+            (m) =>
+              typeof m.username === "string" &&
+              typeof m.text === "string" &&
+              m.text.trim()
+          )
+          .map((m) => ({
+            id: m.id,
+            username: m.username,
+            isOwn: m.senderId === currentUserId,
+            text: m.text,
+            timestamp: m.timestamp,
+          }));
+
+        // History first, then any live messages that arrived meanwhile
+        setMessages((current) => {
+          const known = new Set(history.map((m) => m.id));
+          return [...history, ...current.filter((m) => !known.has(m.id))];
+        });
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          setSendError("Could not load earlier messages.");
+        }
+      });
+
+    return () => controller.abort();
   }, []);
 
   return (

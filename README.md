@@ -92,13 +92,13 @@ The committed `.env.example` must contain placeholders only. Never commit your a
 
 ## Backend endpoints
 
-| Method | Endpoint        | Purpose              |
-| ------ | --------------- | -------------------- |
-| GET    | `/api/health` | Check backend status |
-| POST   | `/register`   | Register a user      |
-| POST   | `/login`      | Log in               |
-| GET    | `/api/auth/me` | Read current username/email (JWT required) |
-| GET    | `/api/messages/:roomId` | Read room history (JWT required) |
+| Method | Endpoint                  | Purpose                                    |
+| ------ | ------------------------- | ------------------------------------------ |
+| GET    | `/api/health`           | Check backend status                       |
+| POST   | `/register`             | Register a user                            |
+| POST   | `/login`                | Log in                                     |
+| GET    | `/api/auth/me`          | Read current username/email (JWT required) |
+| GET    | `/api/messages/:roomId` | Read room history (JWT required)           |
 
 Registration requires `username`, `email`, and `password` in a JSON request body. Passwords must be at least eight characters and should be hashed before storage.
 

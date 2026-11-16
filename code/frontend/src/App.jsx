@@ -5,6 +5,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 
@@ -46,6 +47,8 @@ function AuthProvider({ children }) {
 
 function Navbar() {
   const { isLoggedIn, logout } = useAuth();
+  const { pathname } = useLocation();
+  const isAuthPage = pathname === "/login" || pathname === "/register";
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -60,7 +63,7 @@ function Navbar() {
       </Link>
 
       <nav>
-        {!isLoggedIn ? (
+        {!isLoggedIn || isAuthPage ? (
           <>
             <Link to="/register">Register</Link>
             <Link to="/login">Login</Link>
